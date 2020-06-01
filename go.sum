@@ -1,0 +1,7 @@
+github.com/go-sql-driver/mysql v1.5.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
+github.com/mattn/go-sqlite3 v1.13.0 h1:LnJI81JidiW9r7pS/hXe6cFeO5EXNq7KbfvoJLRI69c=
+github.com/mattn/go-sqlite3 v2.0.3+incompatible h1:gXHsfypPkaMZrKbD5209QV9jbUTJKjyR5WD3HYQSd+U=
+github.com/mattn/go-sqlite3 v2.0.3+incompatible/go.mod h1:FPy6KqzDD04eiIsT53CuJW3U88zkxoIYsOqkbpncsNc=
+github.com/rushteam/gosql v0.1.0/go.mod h1:JW5ui96YWZnckyP2zRIM4fOfD/1Rzhlld06D7JKNZCQ=
+github.com/sohaha/zlsgo v0.1.41 h1:Uyg4XkwIzVtcSb5RX3EAcEA7UAc9mK1nrnREVk/b+zs=
+github.com/sohaha/zlsgo v0.1.41/go.mod h1:8jszf9qU6E2SJTQjxJ1LYKI717Zwa5YZx1gG0dxsukA=
