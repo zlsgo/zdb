@@ -17,14 +17,14 @@ var sessionPool = sync.Pool{
 	},
 }
 
-func (c *Engine) getSessionPool() *Session {
+func (e *Engine) getSessionPool() *Session {
 	s, _ := sessionPool.Get().(*Session)
-	// s.v = atomic.AddUint64(&c.vs, 1)
+	// s.v = atomic.AddUint64(&e.vs, 1)
 	return s
 }
 
-func (c *Engine) putSessionPool(s *Session, force bool) {
-	if c.session != nil && !force && !c.force {
+func (e *Engine) putSessionPool(s *Session, force bool) {
+	if e.session != nil && !force && !e.force {
 		return
 	}
 	// s.config.db.Close()
@@ -33,28 +33,28 @@ func (c *Engine) putSessionPool(s *Session, force bool) {
 	sessionPool.Put(s)
 }
 
-func (c *Engine) getSession(s *Session, master bool) (*Session, error) {
-	if c.session != nil {
-		return c.session, nil
+func (e *Engine) getSession(s *Session, master bool) (*Session, error) {
+	if e.session != nil {
+		return e.session, nil
 	}
-	n := len(c.pools)
+	n := len(e.pools)
 	if n == 0 {
 		return nil, errors.New("not found db")
 	}
 	if s != nil {
 		return s, nil
 	}
-	s = c.getSessionPool()
+	s = e.getSessionPool()
 	s.ctx = context.Background()
 	if master {
-		s.config = c.pools[0]
+		s.config = e.pools[0]
 	} else {
 		var i int
 		if n > 1 {
 			i = zstring.RandInt(1, n-1)
 			// i = 1 + int(s.v)%(n-1)
 		}
-		s.config = c.pools[i]
+		s.config = e.pools[i]
 	}
 	return s, nil
 }
@@ -87,7 +87,7 @@ func (e *Engine) Exec(query string, args ...interface{}) (sql.Result, error) {
 		return nil, err
 	}
 	defer e.putSessionPool(db, false)
-	return db.exec(query, args...)
+	return db.execContext(db.ctx, query, args...)
 }
 
 func (e *Engine) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -96,7 +96,7 @@ func (e *Engine) Query(query string, args ...interface{}) (*sql.Rows, error) {
 		return nil, err
 	}
 	defer e.putSessionPool(db, false)
-	return db.query(query, args...)
+	return db.queryContext(db.ctx, query, args...)
 }
 
 func (e *Engine) Transaction(run TransactionFn) error {

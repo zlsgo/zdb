@@ -2,12 +2,13 @@
 package zdb
 
 import (
-	"database/sql"
 	"time"
 )
 
 type Options struct {
-	MaxIdleConns    int
+	// MaxIdleConns maximum hold connections
+	MaxIdleConns int
+	// MaxOpenConns maximum connection
 	MaxOpenConns    int
 	ConnMaxLifetime time.Duration
 }
@@ -18,14 +19,10 @@ var defOption = Options{
 	ConnMaxLifetime: 0,
 }
 
-func connect(driver, dsn string) (*sql.DB, error) {
-	return sql.Open(driver, dsn)
-}
-
-func (c *Engine) SetOptions(fn func(o *Options)) {
+func (e *Engine) SetOptions(fn func(o *Options)) {
 	options := defOption
 	fn(&options)
-	for _, p := range c.pools {
+	for _, p := range e.pools {
 		p.db.SetMaxIdleConns(options.MaxIdleConns)
 		p.db.SetConnMaxLifetime(options.ConnMaxLifetime)
 		p.db.SetMaxOpenConns(options.MaxOpenConns)

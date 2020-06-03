@@ -16,13 +16,14 @@ type (
 		force   bool
 	}
 )
+
 type (
 	IfeConfig interface {
-		getDsn() string
-		getDriver() string
+		GetDsn() string
+		GetDriver() string
 		GetDB() *sql.DB
 		GetDBE() (*sql.DB, error)
-		setDB(*sql.DB)
+		SetDB(*sql.DB)
 	}
 )
 
@@ -45,20 +46,26 @@ func NewCluster(cfgs ...IfeConfig) (c *Engine, err error) {
 }
 
 func addDB(p *Engine, c IfeConfig) error {
+	var err error
 	cfg := &Config{
-		driver: c.getDriver(),
-		dsn:    c.getDsn(),
+		driver: c.GetDriver(),
+		dsn:    c.GetDsn(),
 	}
-	db, err := sql.Open(cfg.driver, cfg.dsn)
-	if err != nil {
-		return err
-	}
-	cfg.db = db
-	err = db.Ping()
-	if err != nil {
-		return err
+	db := c.GetDB()
+	if db == nil {
+		db, err = sql.Open(cfg.driver, cfg.dsn)
+		if err != nil {
+			return err
+		}
+		cfg.db = db
+		err = db.Ping()
+		if err != nil {
+			return err
+		}
+		c.SetDB(db)
+	} else {
+		cfg.db = db
 	}
 	p.pools = append(p.pools, cfg)
-	c.setDB(db)
 	return err
 }

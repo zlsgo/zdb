@@ -8,32 +8,35 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/sohaha/zlsgo"
 	"github.com/sohaha/zlsgo/zfile"
 	"github.com/sohaha/zlsgo/zstring"
+
+	"github.com/sohaha/zdb/Driver/sqlite3"
 )
 
-var table *TestTableUser
-var testDB *Engine
-var testClusterDB *Engine
-var c = &Sqlite3Config{
-	File: "./test1.db",
-}
-var dbs = []IfeConfig{
-	&Sqlite3Config{
+var (
+	table         *TestTableUser
+	testDB        *Engine
+	testClusterDB *Engine
+	c             = &sqlite3.Config{
 		File: "./test1.db",
-	},
-	&Sqlite3Config{
-		File: "./test2.db",
-	},
-	&Sqlite3Config{
-		File: "./test3.db",
-	},
-	&Sqlite3Config{
-		File: "./test4.db",
-	},
-}
+	}
+	dbs = []IfeConfig{
+		&sqlite3.Config{
+			File: "./test1.db",
+		},
+		&sqlite3.Config{
+			File: "./test2.db",
+		},
+		&sqlite3.Config{
+			File: "./test3.db",
+		},
+		&sqlite3.Config{
+			File: "./test4.db",
+		},
+	}
+)
 
 type TestTableUser struct {
 	ID   int    `db:"id"`
@@ -45,9 +48,8 @@ func (*TestTableUser) TableName() string {
 }
 
 func TestNewCluster(t *testing.T) {
-	tt := zlsgo.NewTest(t)
-
 	var err error
+	tt := zlsgo.NewTest(t)
 	testClusterDB, err = NewCluster(dbs...)
 	t.Log(err)
 	for k, v := range dbs {

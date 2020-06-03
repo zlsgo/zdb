@@ -14,12 +14,12 @@ type Session struct {
 
 type TransactionFn func(s *Engine) error
 
-func (s *Session) exec(query string, args ...interface{}) (sql.Result, error) {
-	if s.tx != nil {
-		return s.tx.Exec(query, args...)
-	}
-	return s.config.db.Exec(query, args...)
-}
+// func (s *Session) exec(query string, args ...interface{}) (sql.Result, error) {
+// 	if s.tx != nil {
+// 		return s.tx.Exec(query, args...)
+// 	}
+// 	return s.config.db.Exec(query, args...)
+// }
 
 func (s *Session) execContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	if s.tx != nil {
@@ -28,15 +28,14 @@ func (s *Session) execContext(ctx context.Context, query string, args ...interfa
 	return s.config.db.ExecContext(ctx, query, args...)
 }
 
-func (s *Session) query(query string, args ...interface{}) (*sql.Rows, error) {
-	return s.queryContext(s.ctx, query, args...)
-}
+// func (s *Session) query(query string, args ...interface{}) (*sql.Rows, error) {
+// 	return s.query(query, args...)
+// }
 
 func (s *Session) queryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	return s.config.db.QueryContext(ctx, query, args...)
 }
 
-// transaction 使用事务
 func (s *Session) transaction(run TransactionFn) error {
 	db, err := s.config.db.Begin()
 	if err != nil {
