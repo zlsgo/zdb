@@ -2,45 +2,40 @@ package zdb
 
 import (
 	"database/sql"
-	"sync"
 )
 
 type (
 	Config struct {
-		Driver string
-		Dsn    string
+		driver string
+		dsn    string
 		db     *sql.DB
 	}
 	Engine struct {
-		vs          uint64
-		pools       []*Config
-		sessionPool sync.Pool
+		pools   []*Config
+		session *Session
+		force   bool
+	}
+)
+type (
+	IfeConfig interface {
+		getDsn() string
+		getDriver() string
+		GetDB() *sql.DB
+		GetDBE() (*sql.DB, error)
+		setDB(*sql.DB)
 	}
 )
 
-func newEngine() *Engine {
-	e := &Engine{}
-	e.sessionPool.New = func() interface{} {
-		return &Session{
-			engine: e,
-		}
-	}
-	return e
-}
-
-func New(driver, dsn string) (c *Engine, err error) {
-	c = newEngine()
-	err = addDB(c, &Config{
-		Driver: driver,
-		Dsn:    dsn,
-	})
+func New(cfg IfeConfig) (c *Engine, err error) {
+	c = &Engine{}
+	err = addDB(c, cfg)
 	return
 }
 
-func NewCluster(cfgs ...Config) (c *Engine, err error) {
-	c = newEngine()
+func NewCluster(cfgs ...IfeConfig) (c *Engine, err error) {
+	c = &Engine{}
 	for i := range cfgs {
-		err = addDB(c, &cfgs[i])
+		err = addDB(c, cfgs[i])
 		if err != nil {
 			return nil, err
 		}
@@ -49,22 +44,21 @@ func NewCluster(cfgs ...Config) (c *Engine, err error) {
 	return
 }
 
-func addDB(p *Engine, cfg *Config) error {
-	p.pools = append(p.pools, cfg)
-	d, err := cfg.Connect()
+func addDB(p *Engine, c IfeConfig) error {
+	cfg := &Config{
+		driver: c.getDriver(),
+		dsn:    c.getDsn(),
+	}
+	db, err := sql.Open(cfg.driver, cfg.dsn)
 	if err != nil {
 		return err
 	}
-	return d.Ping()
-}
-
-func (d *Config) Connect() (*sql.DB, error) {
-	if d.db == nil {
-		db, err := sql.Open(d.Driver, d.Dsn)
-		if err != nil {
-			return db, err
-		}
-		d.db = db
+	cfg.db = db
+	err = db.Ping()
+	if err != nil {
+		return err
 	}
-	return d.db, nil
+	p.pools = append(p.pools, cfg)
+	c.setDB(db)
+	return err
 }

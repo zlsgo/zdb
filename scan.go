@@ -17,15 +17,15 @@ func ScanMap(rows *sql.Rows) (list []map[string]interface{}, err error) {
 		return
 	}
 	columnLength := len(columns)
-	cache := make([]interface{}, columnLength)
-	for index := range cache {
-		var a interface{}
-		cache[index] = &a
+	tmpList := make([]interface{}, columnLength)
+	for index := range tmpList {
+		var tmp interface{}
+		tmpList[index] = &tmp
 	}
 	for rows.Next() {
-		_ = rows.Scan(cache...)
+		_ = rows.Scan(tmpList...)
 		item := make(map[string]interface{})
-		for i, data := range cache {
+		for i, data := range tmpList {
 			item[columns[i]] = *data.(*interface{})
 		}
 		list = append(list, item)

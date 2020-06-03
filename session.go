@@ -6,54 +6,50 @@ import (
 )
 
 type Session struct {
-	v      uint64
 	tx     *sql.Tx
 	config *Config
-	engine *Engine
-	ctx    context.Context
+	// engine *Engine
+	ctx context.Context
 }
 
-func (s *Session) Exec(query string, args ...interface{}) (sql.Result, error) {
-	defer s.put()
+type TransactionFn func(s *Engine) error
+
+func (s *Session) exec(query string, args ...interface{}) (sql.Result, error) {
 	if s.tx != nil {
 		return s.tx.Exec(query, args...)
 	}
 	return s.config.db.Exec(query, args...)
 }
 
-func (s *Session) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	defer s.put()
+func (s *Session) execContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	if s.tx != nil {
 		return s.tx.ExecContext(ctx, query, args...)
 	}
 	return s.config.db.ExecContext(ctx, query, args...)
 }
 
-func (s *Session) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return s.QueryContext(s.ctx, query, args...)
+func (s *Session) query(query string, args ...interface{}) (*sql.Rows, error) {
+	return s.queryContext(s.ctx, query, args...)
 }
 
-func (s *Session) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	defer s.put()
+func (s *Session) queryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	return s.config.db.QueryContext(ctx, query, args...)
 }
 
-func (s *Session) Begin() error {
+// transaction 使用事务
+func (s *Session) transaction(run TransactionFn) error {
 	db, err := s.config.db.Begin()
+	if err != nil {
+		return err
+	}
 	s.tx = db
-	return err
-}
-
-func (s *Session) Commit() error {
-	defer s.put()
-	return s.tx.Commit()
-}
-
-func (s *Session) Rollback() error {
-	defer s.put()
-	return s.tx.Rollback()
-}
-
-func (s *Session) put() {
-	s.engine.sessionPool.Put(s)
+	e := &Engine{
+		session: s,
+	}
+	err = run(e)
+	if err != nil {
+		_ = db.Rollback()
+		return err
+	}
+	return db.Commit()
 }

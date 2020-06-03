@@ -4,14 +4,39 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"sync/atomic"
+	"sync"
+
+	"github.com/sohaha/zlsgo/zstring"
 )
 
-func (c *Engine) putSession(s *Session) {
-	c.sessionPool.Put(s)
+var sessionPool = sync.Pool{
+	New: func() interface{} {
+		return &Session{
+			// engine: e,
+		}
+	},
+}
+
+func (c *Engine) getSessionPool() *Session {
+	s, _ := sessionPool.Get().(*Session)
+	// s.v = atomic.AddUint64(&c.vs, 1)
+	return s
+}
+
+func (c *Engine) putSessionPool(s *Session, force bool) {
+	if c.session != nil && !force && !c.force {
+		return
+	}
+	// s.config.db.Close()
+	s.tx = nil
+	s.config = nil
+	sessionPool.Put(s)
 }
 
 func (c *Engine) getSession(s *Session, master bool) (*Session, error) {
+	if c.session != nil {
+		return c.session, nil
+	}
 	n := len(c.pools)
 	if n == 0 {
 		return nil, errors.New("not found db")
@@ -19,35 +44,41 @@ func (c *Engine) getSession(s *Session, master bool) (*Session, error) {
 	if s != nil {
 		return s, nil
 	}
-	s = c.sessionPool.Get().(*Session)
-	s.v = atomic.AddUint64(&c.vs, 1)
+	s = c.getSessionPool()
 	s.ctx = context.Background()
 	if master {
 		s.config = c.pools[0]
 	} else {
 		var i int
 		if n > 1 {
-			i = 1 + int(s.v)%(n-1)
+			i = zstring.RandInt(1, n-1)
+			// i = 1 + int(s.v)%(n-1)
 		}
 		s.config = c.pools[i]
 	}
 	return s, nil
 }
 
-func (e *Engine) Master(query string, args ...interface{}) (*Session, error) {
+func (e *Engine) Master() (*Engine, error) {
 	db, err := e.getSession(nil, true)
 	if err != nil {
 		return nil, err
 	}
-	return db, nil
+	return &Engine{
+		session: db,
+		force:   true,
+	}, nil
 }
 
-func (e *Engine) Slave() (*Session, error) {
+func (e *Engine) Slave() (*Engine, error) {
 	db, err := e.getSession(nil, false)
 	if err != nil {
 		return nil, err
 	}
-	return db, nil
+	return &Engine{
+		session: db,
+		force:   true,
+	}, nil
 }
 
 func (e *Engine) Exec(query string, args ...interface{}) (sql.Result, error) {
@@ -55,7 +86,8 @@ func (e *Engine) Exec(query string, args ...interface{}) (sql.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return db.Exec(query, args...)
+	defer e.putSessionPool(db, false)
+	return db.exec(query, args...)
 }
 
 func (e *Engine) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -63,29 +95,15 @@ func (e *Engine) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return db.Query(query, args...)
+	defer e.putSessionPool(db, false)
+	return db.query(query, args...)
 }
 
-func (e *Engine) Begin() (*Session, error) {
+func (e *Engine) Transaction(run TransactionFn) error {
 	db, err := e.getSession(nil, true)
 	if err != nil {
-		return nil, err
-	}
-	return db, db.Begin()
-}
-
-func (e *Engine) Rollback(s *Session) error {
-	db, err := e.getSession(s, false)
-	if err != nil {
 		return err
 	}
-	return db.Rollback()
-}
-
-func (e *Engine) Commit(s *Session) error {
-	db, err := e.getSession(s, false)
-	if err != nil {
-		return err
-	}
-	return db.Commit()
+	defer e.putSessionPool(db, true)
+	return db.transaction(run)
 }
