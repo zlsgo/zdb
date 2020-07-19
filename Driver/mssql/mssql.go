@@ -4,19 +4,24 @@ import (
 	"database/sql"
 
 	_ "github.com/denisenkom/go-mssqldb"
+
+	"github.com/sohaha/zdb"
 )
+
+var _ zdb.IfeConfig = &Config{}
 
 // Config database configuration
 type Config struct {
-	db *sql.DB
+	db  *sql.DB
+	Dsn string
 }
 
-func (c *Config) GetDB() *sql.DB {
-	db, _ := c.GetDBE()
+func (c *Config) DB() *sql.DB {
+	db, _ := c.MustDB()
 	return db
 }
 
-func (c *Config) GetDBE() (*sql.DB, error) {
+func (c *Config) MustDB() (*sql.DB, error) {
 	var err error
 	if c.db == nil {
 		c.db, err = sql.Open(c.GetDriver(), c.GetDsn())
@@ -29,8 +34,12 @@ func (c *Config) SetDB(db *sql.DB) {
 }
 
 func (c *Config) GetDsn() string {
-	return ""
+	if c.Dsn != "" {
+		return c.Dsn
+	}
+	return c.Dsn
 }
+
 func (c *Config) GetDriver() string {
 	return "mssql"
 }

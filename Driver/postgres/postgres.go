@@ -1,23 +1,26 @@
-package sqlite3
+package postgres
 
 import (
 	"database/sql"
+	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 
 	"github.com/sohaha/zdb"
-	"github.com/sohaha/zlsgo/zfile"
-	"github.com/sohaha/zlsgo/zutil"
 )
 
 var _ zdb.IfeConfig = &Config{}
 
 // Config database configuration
 type Config struct {
-	File   string
-	Dsn    string
-	db     *sql.DB
-	Memory bool
+	db       *sql.DB
+	Dsn      string
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
 }
 
 func (c *Config) DB() *sql.DB {
@@ -41,9 +44,11 @@ func (c *Config) GetDsn() string {
 	if c.Dsn != "" {
 		return c.Dsn
 	}
-	return "file:" + zfile.RealPath(c.File) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "").(string)
+	return fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s",
+		c.Host, c.Port, c.User, c.DBName, c.Password, c.SSLMode)
+
 }
 
 func (c *Config) GetDriver() string {
-	return "sqlite3"
+	return "postgres"
 }

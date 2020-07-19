@@ -2,6 +2,8 @@ package zdb
 
 import (
 	"database/sql"
+	"sync"
+	"time"
 )
 
 type (
@@ -11,61 +13,74 @@ type (
 		db     *sql.DB
 	}
 	Engine struct {
-		pools   []*Config
-		session *Session
-		force   bool
+		pools           []*Config
+		session         *Session
+		force           bool
+		execMaxLifetime time.Duration
+		isFixed         bool
 	}
+	JsonTime time.Time
 )
 
 type (
 	IfeConfig interface {
 		GetDsn() string
 		GetDriver() string
-		GetDB() *sql.DB
-		GetDBE() (*sql.DB, error)
+		DB() *sql.DB
+		MustDB() (*sql.DB, error)
 		SetDB(*sql.DB)
 	}
 )
 
-func New(cfg IfeConfig) (c *Engine, err error) {
+var engines sync.Map
+
+func New(cfg IfeConfig, alias ...string) (c *Engine, err error) {
 	c = &Engine{}
-	err = addDB(c, cfg)
+	err = add(c, cfg)
+	if len(alias) > 0 {
+		engines.Store(alias[0], c)
+	}
 	return
 }
 
-func NewCluster(cfgs ...IfeConfig) (c *Engine, err error) {
+func NewCluster(cfgs []IfeConfig, alias ...string) (c *Engine, err error) {
 	c = &Engine{}
 	for i := range cfgs {
-		err = addDB(c, cfgs[i])
+		err = add(c, cfgs[i])
 		if err != nil {
 			return nil, err
 		}
 	}
-
+	if len(alias) > 0 {
+		engines.Store(alias[0], c)
+	}
 	return
 }
 
-func addDB(p *Engine, c IfeConfig) error {
-	var err error
+func DB(alias string) *Engine {
+	db, _ := MustDB(alias)
+	return db
+}
+
+func MustDB(alias string) (*Engine, error) {
+	db, ok := engines.Load(alias)
+	if ok {
+		return db.(*Engine), nil
+	}
+	return nil, ErrDBNotExist
+}
+
+func add(p *Engine, c IfeConfig) (err error) {
 	cfg := &Config{
 		driver: c.GetDriver(),
 		dsn:    c.GetDsn(),
 	}
-	db := c.GetDB()
-	if db == nil {
-		db, err = sql.Open(cfg.driver, cfg.dsn)
-		if err != nil {
-			return err
-		}
-		cfg.db = db
-		err = db.Ping()
-		if err != nil {
-			return err
-		}
-		c.SetDB(db)
-	} else {
-		cfg.db = db
+	cfg.db, err = c.MustDB()
+	if err != nil {
+		return
 	}
-	p.pools = append(p.pools, cfg)
+	if err = cfg.db.Ping(); err == nil {
+		p.pools = append(p.pools, cfg)
+	}
 	return err
 }

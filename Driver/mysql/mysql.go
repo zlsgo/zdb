@@ -1,12 +1,12 @@
-package sqlite3
+package mysql
 
 import (
 	"database/sql"
+	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/sohaha/zdb"
-	"github.com/sohaha/zlsgo/zfile"
 	"github.com/sohaha/zlsgo/zutil"
 )
 
@@ -14,10 +14,14 @@ var _ zdb.IfeConfig = &Config{}
 
 // Config database configuration
 type Config struct {
-	File   string
-	Dsn    string
-	db     *sql.DB
-	Memory bool
+	db         *sql.DB
+	Dsn        string
+	Host       string
+	Port       int
+	User       string
+	Password   string
+	DBName     string
+	Parameters string
 }
 
 func (c *Config) DB() *sql.DB {
@@ -41,9 +45,11 @@ func (c *Config) GetDsn() string {
 	if c.Dsn != "" {
 		return c.Dsn
 	}
-	return "file:" + zfile.RealPath(c.File) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "").(string)
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
+		c.User, c.Password, c.Host, c.Port, c.DBName, zutil.IfVal(c.Parameters == "", "parseTime=true&charset=utf8&loc=Local", c.Parameters))
+
 }
 
 func (c *Config) GetDriver() string {
-	return "sqlite3"
+	return "mysql"
 }
