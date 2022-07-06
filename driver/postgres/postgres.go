@@ -5,14 +5,17 @@ import (
 	"fmt"
 
 	_ "github.com/lib/pq"
-
-	"github.com/sohaha/zdb"
+	"github.com/zlsgo/zdb/driver"
 )
 
-var _ zdb.IfeConfig = &Config{}
+var (
+	_ driver.IfeConfig = &Config{}
+	_ driver.Dialect   = &Config{}
+)
 
 // Config database configuration
 type Config struct {
+	driver.Typ
 	db       *sql.DB
 	Dsn      string
 	Host     string
@@ -46,9 +49,12 @@ func (c *Config) GetDsn() string {
 	}
 	return fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.DBName, c.Password, c.SSLMode)
-
 }
 
 func (c *Config) GetDriver() string {
 	return "postgres"
+}
+
+func (c *Config) Value() driver.Typ {
+	return driver.PostgreSQL
 }

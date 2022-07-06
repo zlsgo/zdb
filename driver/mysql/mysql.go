@@ -5,15 +5,19 @@ import (
 	"fmt"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/zlsgo/zdb/driver"
 
-	"github.com/sohaha/zdb"
 	"github.com/sohaha/zlsgo/zutil"
 )
 
-var _ zdb.IfeConfig = &Config{}
+var (
+	_ driver.IfeConfig = &Config{}
+	_ driver.Dialect   = &Config{}
+)
 
-// Config database configuration
+// Config databaseName configuration
 type Config struct {
+	driver.Typ
 	db         *sql.DB
 	Dsn        string
 	Host       string
@@ -46,10 +50,13 @@ func (c *Config) GetDsn() string {
 		return c.Dsn
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
-		c.User, c.Password, c.Host, c.Port, c.DBName, zutil.IfVal(c.Parameters == "", "parseTime=true&charset=utf8&loc=Local", c.Parameters))
-
+		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 3306, c.Port), c.DBName, zutil.IfVal(c.Parameters == "", "parseTime=true&charset=utf8&loc=Local", c.Parameters))
 }
 
 func (c *Config) GetDriver() string {
 	return "mysql"
+}
+
+func (c *Config) Value() driver.Typ {
+	return driver.MySQL
 }

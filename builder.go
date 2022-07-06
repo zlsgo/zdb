@@ -1,0 +1,143 @@
+package zdb
+
+import (
+	"math"
+
+	"github.com/zlsgo/zdb/builder"
+)
+
+func (e *DB) Insert(table string, data interface{}) (lastId int64, err error) {
+	b := builder.Insert(table).SetDriver(e.driver)
+
+	cols, args, err := parseValues(data)
+	if err != nil {
+		return 0, err
+	}
+
+	if _, ok := data.(*QuoteData); ok {
+		cols = e.QuoteCols(cols)
+	}
+
+	b.Cols(cols...)
+	for i := range args {
+		b.Values(args[i]...)
+	}
+
+	sql, values := b.Build()
+
+	if len(values) == 0 {
+		return 0, errInsertEmpty
+	}
+
+	result, err := e.Exec(sql, values...)
+	if err != nil {
+		return 0, err
+	}
+
+	if i, _ := result.RowsAffected(); i == 0 {
+		return 0, errInsertEmpty
+	}
+
+	return result.LastInsertId()
+}
+
+func (e *DB) Find(table string, fn func(b *builder.SelectBuilder) error) (map[string]interface{}, error) {
+	resultMap, err := e.FindAll(table, func(sb *builder.SelectBuilder) error {
+		sb.Limit(1)
+		if fn == nil {
+			return nil
+		}
+		return fn(sb)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resultMap[0], err
+}
+
+type Pages struct {
+	Total   uint `json:"total"`
+	Count   uint `json:"count"`
+	Curpage uint `json:"curpage"`
+}
+
+func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBuilder) error) ([]map[string]interface{}, Pages, error) {
+	var b *builder.SelectBuilder
+	resultMap, err := e.FindAll(table, func(bui *builder.SelectBuilder) error {
+		bui.Limit(pagesize)
+		if page > 0 {
+			bui.Offset((page - 1) * pagesize)
+		}
+
+		err := fn(bui)
+		b = bui
+		return err
+	})
+
+	pages := Pages{
+		Curpage: uint(page),
+	}
+
+	if err != nil {
+		return nil, Pages{}, err
+	}
+
+	sql, values := b.Select(b.As("count(*)", "total")).Limit(-1).Offset(-1).Build()
+	rows, err := e.Query(sql, values...)
+
+	if err == nil {
+		if m, _, err := ScanToMap(rows); err == nil {
+			pages.Total = uint(m[0]["total"].(int64))
+			pages.Count = uint(math.Ceil(float64(pages.Total) / float64(pagesize)))
+		}
+	}
+
+	return resultMap, pages, err
+}
+
+func (e *DB) FindAll(table string, fn func(b *builder.SelectBuilder) error) ([]map[string]interface{}, error) {
+	b := builder.Query(table).SetDriver(e.driver)
+
+	if fn != nil {
+		if err := fn(b); err != nil {
+			return nil, err
+		}
+	}
+
+	return parseQuery(e, b)
+}
+
+func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int64, error) {
+	b := builder.Delete(table).SetDriver(e.driver)
+	if err := fn(b); err != nil {
+		return 0, err
+	}
+
+	return parseExec(e, b)
+}
+
+func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
+	b := builder.Update(table).SetDriver(e.driver)
+
+	cols, args, err := parseValues(data)
+	if err != nil && err != errNoData {
+		return 0, err
+	}
+
+	if _, ok := data.(*QuoteData); ok {
+		cols = e.QuoteCols(cols)
+	}
+
+	for i := 0; i < len(cols); i++ {
+		col := cols[i]
+		b.SetMore(b.Assign(col, args[i][0]))
+	}
+
+	if err := fn(b); err != nil {
+		return 0, err
+	}
+
+	return parseExec(e, b)
+}

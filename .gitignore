@@ -1,1 +1,8 @@
 .vscode
+.idea/.gitignore
+.idea/modules.xml
+.idea/sqldialects.xml
+.idea/vcs.xml
+.idea/zdb_dev.iml
+.idea/codeStyles/codeStyleConfig.xml
+.idea/inspectionProfiles/Project_Default.xml

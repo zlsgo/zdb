@@ -11,24 +11,23 @@ import (
 type Session struct {
 	tx     *sql.Tx
 	config *Config
-	ctx context.Context
+	ctx    context.Context
 }
 
-type DBCallback func(e *Engine) error
+type DBCallback func(e *DB) error
 
 var sessionPool = sync.Pool{
 	New: func() interface{} {
-		return &Session{
-		}
+		return &Session{}
 	},
 }
 
-func (e *Engine) getSessionPool() *Session {
+func (e *DB) getSessionPool() *Session {
 	s, _ := sessionPool.Get().(*Session)
 	return s
 }
 
-func (e *Engine) putSessionPool(s *Session, force bool) {
+func (e *DB) putSessionPool(s *Session, force bool) {
 	if e.session != nil && !force && !e.force {
 		return
 	}
@@ -40,7 +39,7 @@ func (e *Engine) putSessionPool(s *Session, force bool) {
 // Debug ...
 var Debug = false
 
-func (e *Engine) getSession(s *Session, master bool, ctx ...context.Context) (*Session, error) {
+func (e *DB) getSession(s *Session, master bool, ctx ...context.Context) (*Session, error) {
 	if e.session != nil {
 		return e.session, nil
 	}
@@ -52,7 +51,7 @@ func (e *Engine) getSession(s *Session, master bool, ctx ...context.Context) (*S
 		return s, nil
 	}
 	s = e.getSessionPool()
-	if len(ctx) > 0 {
+	if len(ctx) > 0 && ctx[0] != nil {
 		s.ctx = ctx[0]
 	} else {
 		s.ctx = context.Background()
@@ -95,7 +94,7 @@ func (s *Session) transaction(run DBCallback) error {
 		return err
 	}
 	s.tx = db
-	e := &Engine{
+	e := &DB{
 		session: s,
 	}
 	err = run(e)

@@ -5,36 +5,37 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/sohaha/zdb"
 	"github.com/sohaha/zlsgo"
 	"github.com/sohaha/zlsgo/zjson"
 	"github.com/sohaha/zlsgo/ztime"
 	"github.com/sohaha/zlsgo/zutil"
+	"github.com/zlsgo/zdb"
+	"github.com/zlsgo/zdb/testdata"
 )
 
 func TestBase(t *testing.T) {
 	tt := zlsgo.NewTest(t)
 
-	dbConf, err := getDbConf("")
-	zutil.CheckErr(err, true)
+	dbConf, clera, err := testdata.GetDbConf("")
+	tt.NoError(err)
+	defer clera()
 
 	db, err := zdb.New(dbConf)
-	zutil.CheckErr(err, true)
+	tt.NoError(err)
 
-	err = initTable(db, dbType)
-	zutil.CheckErr(err, true)
+	err = testdata.InitTable(db)
+	tt.NoError(err)
 
 	baseExec(db, tt)
 	baseQuery(db, t, tt)
 	baseTransaction(db, t, tt)
 }
 
-func baseExec(db *zdb.Engine, tt *zlsgo.TestUtil) {
-	res, err := db.Exec(`INSERT INTO ` + table.TableName() + ` (name,date,is_ok) VALUES ('init','` + ztime.Now() + `',1)`)
+func baseExec(db *zdb.DB, tt *zlsgo.TestUtil) {
+	res, err := db.Exec(`INSERT INTO ` + testdata.TestTable.TableName() + ` (name,date,is_ok) VALUES ('init','` + ztime.Now() + `',1)`)
 	tt.EqualExit(nil, err)
 	id, err := res.LastInsertId()
 	tt.EqualExit(nil, err)
@@ -43,23 +44,23 @@ func baseExec(db *zdb.Engine, tt *zlsgo.TestUtil) {
 	tt.EqualExit(1, int(affected))
 	tt.EqualExit(1, int(id))
 
-	_, _ = db.Exec(`INSERT INTO ` + table.TableName() + ` (name) VALUES ('test')`)
+	_, _ = db.Exec(`INSERT INTO ` + testdata.TestTable.TableName() + ` (name) VALUES ('test')`)
 }
 
-func baseQuery(db *zdb.Engine, t *testing.T, tt *zlsgo.TestUtil) {
-	rows, err := db.Query(fmt.Sprintf("select * from %s", table.TableName()))
+func baseQuery(db *zdb.DB, t *testing.T, tt *zlsgo.TestUtil) {
+	rows, err := db.Query(fmt.Sprintf("select * from %s", testdata.TestTable.TableName()))
 	tt.EqualExit(nil, err)
-	rowsMap, err := zdb.ScanToMap(rows)
+	rowsMap, count, err := zdb.ScanToMap(rows)
 	tt.EqualExit(nil, err)
-	t.Log(rowsMap)
+	t.Log(count, rowsMap)
 	tt.EqualExit(2, len(rowsMap))
 	tt.EqualExit("init", rowsMap[0]["name"])
 
-	var users []TestTableUser
-	rows, _ = db.Query(fmt.Sprintf("select * from %s", table.TableName()))
-	err = zdb.Scan(rows, &users)
+	var users []testdata.TestTableUser
+	rows, _ = db.Query(fmt.Sprintf("select * from %s", testdata.TestTable.TableName()))
+	count, err = zdb.Scan(rows, &users)
 	tt.EqualExit(nil, err)
-	t.Log(users)
+	t.Log(count, users)
 	tt.EqualExit(2, len(users))
 	tt.EqualExit(1, users[0].ID)
 	tt.EqualExit("init", users[0].Name)
@@ -68,27 +69,27 @@ func baseQuery(db *zdb.Engine, t *testing.T, tt *zlsgo.TestUtil) {
 	json, _ := zjson.Marshal(users)
 	t.Log(string(json))
 
-	var user TestTableUser
-	rows, _ = db.Query(fmt.Sprintf("select * from %s where id = ? limit 1", table.TableName()), 1)
-	err = zdb.Scan(rows, &user)
+	var user testdata.TestTableUser
+	rows, _ = db.Query(fmt.Sprintf("select * from %s where id = ? limit 1", testdata.TestTable.TableName()), 1)
+	count, err = zdb.Scan(rows, &user)
 	tt.EqualExit(nil, err)
 	tt.EqualExit(1, user.ID)
 	tt.EqualExit("init", user.Name)
 	tt.EqualExit(ztime.Now(), user.Date.String())
 
 	json, _ = zjson.Marshal(user)
-	t.Log(string(json))
+	t.Log(count, string(json))
 }
 
-func baseTransaction(db *zdb.Engine, t *testing.T, tt *zlsgo.TestUtil) {
+func baseTransaction(db *zdb.DB, t *testing.T, tt *zlsgo.TestUtil) {
 	var err error
 	for _, v := range [][]string{
-		{"false", `INSERT INTO ` + table.TableName() + ` (name) VALUES ('Rollback -')`},
-		{"true", `INSERT INTO ` + table.TableName() + ` (name) VALUES ('Commit -')`},
+		{"false", `INSERT INTO ` + testdata.TestTable.TableName() + ` (name) VALUES ('Rollback -')`},
+		{"true", `INSERT INTO ` + testdata.TestTable.TableName() + ` (name) VALUES ('Commit -')`},
 	} {
 		ifRollback := v[0] == "false"
 		rollbackErr := errors.New("测试回滚")
-		err = db.Transaction(func(e *zdb.Engine) error {
+		err = db.Transaction(func(e *zdb.DB) error {
 			_, err := e.Exec(v[1])
 			if err != nil {
 				return err
@@ -109,11 +110,13 @@ func baseTransaction(db *zdb.Engine, t *testing.T, tt *zlsgo.TestUtil) {
 
 func TestOptions(t *testing.T) {
 	tt := zlsgo.NewTest(t)
-	dbConf, err := getDbConf("0")
-	zutil.CheckErr(err, true)
+
+	dbConf, clera, err := testdata.GetDbConf("0")
+	tt.NoError(err)
+	defer clera()
 
 	db, err := zdb.New(dbConf)
-	zutil.CheckErr(err, true)
+	tt.NoError(err)
 
 	db.Options(func(o *zdb.Options) {
 		o.MaxOpenConns = 1
@@ -122,21 +125,19 @@ func TestOptions(t *testing.T) {
 		o.MaxIdleConns = 1
 	})
 
-	err = initTable(db, dbType)
-	zutil.CheckErr(err, true)
+	err = testdata.InitTable(db)
+	tt.NoError(err)
 
 	baseExec(db, tt)
 
 	var g sync.WaitGroup
-	ctx, can := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, can := context.WithTimeout(context.Background(), 3*time.Second)
 
 	finish := make(chan struct{}, 1)
 	now := time.Now()
 	defer can()
 
-	var ok int64 = 0
-	var total int64 = 0
-	var done int64 = 0
+	total, ok, done := zutil.NewInt64(0), zutil.NewInt64(0), zutil.NewInt64(0)
 	max := 10
 	for i := 0; ; {
 		if i >= max {
@@ -144,16 +145,17 @@ func TestOptions(t *testing.T) {
 		}
 		g.Add(1)
 		go func(i int) {
-			atomic.AddInt64(&total, 1)
-			ctx, c := context.WithTimeout(context.Background(), 3*time.Second)
-			db.Source(func(db *zdb.Engine) error {
-				_, err := db.Query("SELECT * FROM " + table.TableName())
+			total.Add(1)
+			ctx, c := context.WithTimeout(context.Background(), 1*time.Second)
+			db.Source(func(db *zdb.DB) error {
+				_, err := db.Query("SELECT * FROM " + testdata.TestTable.TableName())
 				if err == nil {
-					atomic.AddInt64(&ok, 1)
+					ok.Add(1)
 				} else {
 					defer c()
 				}
-				atomic.AddInt64(&done, 1)
+
+				done.Add(1)
 				return nil
 			}, ctx)
 			g.Done()
@@ -162,64 +164,63 @@ func TestOptions(t *testing.T) {
 	}
 
 	runCtx(t, finish, ctx, &g)
-	t.Log(time.Since(now), "成功数量:", ok, "失败数量:", int(total-ok), "跑完数量:", done)
+	t.Log(time.Since(now), "成功数量:", ok, "失败数量:", int(total.Load()-ok.Load()), "跑完数量:", done)
 	t.Logf("%+v", dbConf.DB().Stats())
 	tt.EqualExit(true, dbConf.DB().Stats().WaitCount > 6)
-	tt.EqualExit(9, int(total-ok))
-	tt.EqualExit(10, int(done))
+	tt.EqualExit(10, int(done.Load()))
 
-	ok = 0
-	total = 0
-	done = 0
+	ok.Swap(0)
+	done.Swap(0)
+	total.Swap(0)
 	for i := 0; ; {
 		if i >= max {
 			break
 		}
 		g.Add(1)
 		go func(i int) {
-			atomic.AddInt64(&total, 1)
-			r, err := db.Query("SELECT * FROM  " + table.TableName())
+			total.Add(1)
+			r, err := db.Query("SELECT * FROM  " + testdata.TestTable.TableName())
 			if err == nil {
-				atomic.AddInt64(&ok, 1)
+				ok.Add(1)
 				err = r.Close()
 			}
-			atomic.AddInt64(&done, 1)
+			done.Add(1)
 			g.Done()
 			tt.EqualNil(err)
 		}(i)
 		i++
 	}
 	runCtx(t, finish, ctx, &g)
-	t.Log(time.Since(now), "成功数量:", ok, "失败数量:", int(total-ok), "跑完数量:", done)
+	t.Log(time.Since(now), "成功数量:", ok, "失败数量:", int(total.Load()-ok.Load()), "跑完数量:", done)
 	t.Logf("%+v", dbConf.DB().Stats())
-	tt.EqualExit(0, int(total-ok))
-	tt.EqualExit(10, int(done))
+	tt.EqualExit(0, int(total.Load()-ok.Load()))
+	tt.EqualExit(10, int(done.Load()))
 
-	ok = 0
-	total = 0
-	done = 0
+	ok.Swap(0)
+	done.Swap(0)
+	total.Swap(0)
 	for i := 0; ; {
 		if i >= max {
 			break
 		}
 		g.Add(1)
 		go func(i int) {
-			atomic.AddInt64(&total, 1)
-			_, err := db.Query("SELECT * FROM  " + table.TableName())
+			total.Add(1)
+			_, err := db.Query("SELECT * FROM  " + testdata.TestTable.TableName())
 			if err == nil {
-				atomic.AddInt64(&ok, 1)
+				ok.Add(1)
 			}
-			atomic.AddInt64(&done, 1)
+			done.Add(1)
 			g.Done()
 		}(i)
 		i++
 	}
 	runCtx(t, finish, ctx, &g)
 
-	t.Log(time.Since(now), "成功数量:", atomic.LoadInt64(&ok), "失败数量:", int(atomic.LoadInt64(&total)-atomic.LoadInt64(&ok)), "跑完数量:", atomic.LoadInt64(&done))
+	t.Log(time.Since(now), "成功数量:", ok.Load(), "失败数量:", int(total.Load()-ok.Load()), "跑完数量:", done.Load())
 	t.Logf("%+v", dbConf.DB().Stats())
-	tt.EqualExit(9, int(total-ok))
-	tt.EqualExit(1, int(done))
+	tt.EqualExit(9, int(total.Load()-ok.Load()))
+	tt.EqualExit(1, int(done.Load()))
 
 }
 

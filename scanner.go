@@ -36,26 +36,35 @@ var (
 	ErrNilRows = errors.New("rows can't be nil")
 	// ErrSliceToString means only []uint8 can be transmuted into string
 	ErrSliceToString = errors.New("can't transmute a non-uint8 slice to string")
-	// ErrEmptyResult occurs when target of Scan isn't slice and the result of the query is empty
-	ErrEmptyResult = errors.New(`empty result`)
 	// ErrConversionFailed conversion failed
-	ErrConversionFailed = errors.New(`conversion failed`)
-	ErrDBNotExist       = errors.New("the database instance does not exist")
+	ErrConversionFailed = errors.New("conversion failed")
+	// ErrDBNotExist db not exist
+	ErrDBNotExist = errors.New("database instance does not exist")
+	// ErrRecordNotFound no records found
+	ErrRecordNotFound = errors.New("no records found")
+
+	errNoData      = errors.New("no data")
+	errInsertEmpty = errors.New("insert data can not be empty")
 )
 
-func Scan(rows IfeRows, out interface{}) error {
+func Scan(rows IfeRows, out interface{}) (int, error) {
+	data, count, err := resolveDataFromRows(rows)
+	if err != nil {
+		return 0, err
+	}
+	if nil == data {
+		return count, ErrRecordNotFound
+	}
+	return count, scan(data, out)
+}
+
+func scan(data []map[string]interface{}, out interface{}) (err error) {
 	targetValueOf := reflect.ValueOf(out)
 	if nil == out || targetValueOf.Kind() != reflect.Ptr || targetValueOf.IsNil() {
 		return ErrTargetNotSettable
 	}
-	data, err := resolveDataFromRows(rows)
-	if nil != err {
-		return err
-	}
-	if nil == data {
-		return ErrEmptyResult
-	}
-	targetValueOf = reflect.ValueOf(out).Elem()
+
+	targetValueOf = targetValueOf.Elem()
 	switch targetValueOf.Kind() {
 	case reflect.Slice:
 		err = bindSlice(data, targetValueOf)
@@ -67,7 +76,7 @@ func Scan(rows IfeRows, out interface{}) error {
 }
 
 // ScanToMap returns the result in the form of []map[string]interface{}
-func ScanToMap(rows IfeRows) ([]map[string]interface{}, error) {
+func ScanToMap(rows IfeRows) ([]map[string]interface{}, int, error) {
 	return resolveDataFromRows(rows)
 }
 
@@ -110,29 +119,41 @@ func bind(result map[string]interface{}, rv reflect.Value) (resp error) {
 		}
 		return err
 	}
-	for i := 0; i < rv.NumField(); i++ {
-		fieldTypeI := typeObj.Field(i)
-		fieldName := fieldTypeI.Name
-		valuei := rv.Field(i)
-		if !valuei.CanSet() {
-			continue
+
+	if typeObj.Kind() == reflect.Struct {
+		for i := 0; i < rv.NumField(); i++ {
+			fieldTypeI := typeObj.Field(i)
+			fieldName := fieldTypeI.Name
+			valuei := rv.Field(i)
+			if !valuei.CanSet() {
+				continue
+			}
+			tagName, _ := lookUpTagName(fieldTypeI)
+			if tagName == "" {
+				if fieldName == "ID" {
+					tagName = "id"
+				} else {
+					tagName = zstring.CamelCaseToSnakeCase(fieldName)
+				}
+			}
+			mapValue, ok := result[tagName]
+			if !ok || mapValue == nil {
+				continue
+			}
+			if fieldTypeI.Type.Kind() == reflect.Ptr && !fieldTypeI.Type.Implements(reflect.TypeOf(new(ByteUnmarshaler)).Elem()) {
+				valuei.Set(reflect.New(fieldTypeI.Type.Elem()))
+				valuei = valuei.Elem()
+			}
+			err := convert(mapValue, valuei)
+			if nil != err {
+				return err
+			}
 		}
-		tagName, _ := lookUpTagName(fieldTypeI)
-		if tagName == "" {
-			tagName = zstring.CamelCaseToSnakeCase(fieldName)
+	} else if rv.CanSet() {
+		for i := range result {
+			return convert(result[i], rv)
 		}
-		mapValue, ok := result[tagName]
-		if !ok || mapValue == nil {
-			continue
-		}
-		if fieldTypeI.Type.Kind() == reflect.Ptr && !fieldTypeI.Type.Implements(reflect.TypeOf(new(ByteUnmarshaler)).Elem()) {
-			valuei.Set(reflect.New(fieldTypeI.Type.Elem()))
-			valuei = valuei.Elem()
-		}
-		err := convert(mapValue, valuei)
-		if nil != err {
-			return err
-		}
+		return nil
 	}
 	return nil
 }
@@ -149,27 +170,28 @@ func isFloatSeriesType(k reflect.Kind) bool {
 	return k == reflect.Float32 || k == reflect.Float64
 }
 
-func resolveDataFromRows(rows IfeRows) ([]map[string]interface{}, error) {
+func resolveDataFromRows(rows IfeRows) ([]map[string]interface{}, int, error) {
+	result := make([]map[string]interface{}, 0)
 	if nil == rows {
-		return nil, ErrNilRows
+		return result, 0, ErrNilRows
 	}
 	columns, err := rows.Columns()
 	if nil != err {
-		return nil, err
+		return result, 0, err
 	}
 	length := len(columns)
-	var result []map[string]interface{}
 	values := make([]interface{}, length)
 	valuePtrs := make([]interface{}, length)
+	count := 0
 	for rows.Next() {
 		for i := 0; i < length; i++ {
 			valuePtrs[i] = &values[i]
 		}
 		err = rows.Scan(valuePtrs...)
 		if err != nil {
-			return nil, err
+			return result, 0, err
 		}
-		entry := make(map[string]interface{})
+		entry := make(map[string]interface{}, length)
 		for i, col := range columns {
 			val := values[i]
 			b, ok := val.([]byte)
@@ -180,8 +202,9 @@ func resolveDataFromRows(rows IfeRows) ([]map[string]interface{}, error) {
 			}
 		}
 		result = append(result, entry)
+		count++
 	}
-	return result, nil
+	return result, count, nil
 }
 
 func lookUpTagName(rf reflect.StructField) (string, bool) {
@@ -195,7 +218,7 @@ func lookUpTagName(rf reflect.StructField) (string, bool) {
 
 func resolveTagName(tag string) string {
 	idx := strings.IndexByte(tag, ',')
-	if -1 == idx {
+	if idx == -1 {
 		return tag
 	}
 	return tag[:idx]

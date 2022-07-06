@@ -4,83 +4,88 @@ import (
 	"database/sql"
 	"sync"
 	"time"
+
+	"github.com/zlsgo/zdb/builder"
+	"github.com/zlsgo/zdb/driver"
 )
 
 type (
 	Config struct {
-		driver string
+		driver driver.Dialect
 		dsn    string
 		db     *sql.DB
 	}
-	Engine struct {
-		pools           []*Config
-		session         *Session
-		force           bool
-		execMaxLifetime time.Duration
-		isFixed         bool
+	DB struct {
+		pools   []*Config
+		session *Session
+		force   bool
+		isFixed bool
+		driver  driver.Dialect
 	}
 	JsonTime time.Time
 )
 
-type (
-	IfeConfig interface {
-		GetDsn() string
-		GetDriver() string
-		DB() *sql.DB
-		MustDB() (*sql.DB, error)
-		SetDB(*sql.DB)
-	}
-)
-
 var engines sync.Map
 
-func New(cfg IfeConfig, alias ...string) (c *Engine, err error) {
-	c = &Engine{}
-	err = add(c, cfg)
+func New(cfg driver.IfeConfig, alias ...string) (e *DB, err error) {
+	e = &DB{}
+	err = e.add(cfg)
 	if len(alias) > 0 {
-		engines.Store(alias[0], c)
+		engines.Store(alias[0], e)
 	}
 	return
 }
 
-func NewCluster(cfgs []IfeConfig, alias ...string) (c *Engine, err error) {
-	c = &Engine{}
+func NewCluster(cfgs []driver.IfeConfig, alias ...string) (e *DB, err error) {
+	e = &DB{}
 	for i := range cfgs {
-		err = add(c, cfgs[i])
+		err = e.add(cfgs[i])
 		if err != nil {
 			return nil, err
 		}
 	}
 	if len(alias) > 0 {
-		engines.Store(alias[0], c)
+		engines.Store(alias[0], e)
 	}
 	return
 }
 
-func DB(alias string) *Engine {
-	db, _ := MustDB(alias)
+func Instance(alias string) *DB {
+	db, _ := MustInstance(alias)
 	return db
 }
 
-func MustDB(alias string) (*Engine, error) {
+func MustInstance(alias string) (*DB, error) {
 	db, ok := engines.Load(alias)
 	if ok {
-		return db.(*Engine), nil
+		return db.(*DB), nil
 	}
-	return nil, ErrDBNotExist
+
+	return &DB{
+		driver: builder.DefaultDriver,
+	}, ErrDBNotExist
 }
 
-func add(p *Engine, c IfeConfig) (err error) {
+func (e *DB) add(c driver.IfeConfig) (err error) {
 	cfg := &Config{
-		driver: c.GetDriver(),
-		dsn:    c.GetDsn(),
+		dsn: c.GetDsn(),
 	}
 	cfg.db, err = c.MustDB()
 	if err != nil {
 		return
 	}
+
+	cfg.driver = e.toDialect(c)
+
 	if err = cfg.db.Ping(); err == nil {
-		p.pools = append(p.pools, cfg)
+		e.pools = append(e.pools, cfg)
 	}
 	return err
+}
+
+func (e *DB) toDialect(c driver.IfeConfig) driver.Dialect {
+	if dd, ok := c.(driver.Dialect); ok {
+		e.driver = dd
+	}
+	return e.driver
 }

@@ -4,37 +4,44 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sohaha/zdb"
 	"github.com/sohaha/zlsgo"
-	"github.com/sohaha/zlsgo/zutil"
+	"github.com/zlsgo/zdb"
+	"github.com/zlsgo/zdb/driver"
+	"github.com/zlsgo/zdb/testdata"
 )
 
 func TestCluster(t *testing.T) {
-	var err error
+	var (
+		err   error
+		clera func()
+	)
 	tt := zlsgo.NewTest(t)
 	zdb.Debug = true
-	dbConfs := make([]zdb.IfeConfig, 3)
-	dbConfs[0], err = getDbConf("1")
-	zutil.CheckErr(err, true)
-	dbConfs[1], err = getDbConf("2")
-	zutil.CheckErr(err, true)
-	dbConfs[2], err = getDbConf("3")
-	zutil.CheckErr(err, true)
+	dbConfs := make([]driver.IfeConfig, 3)
+	dbConfs[0], clera, err = testdata.GetDbConf("1")
+	tt.NoError(err)
+	defer clera()
+	dbConfs[1], clera, err = testdata.GetDbConf("2")
+	tt.NoError(err)
+	defer clera()
+	dbConfs[2], clera, err = testdata.GetDbConf("3")
+	tt.NoError(err)
+	defer clera()
 
 	db, err := zdb.NewCluster(dbConfs, "c")
-	zutil.CheckErr(err, true)
+	tt.NoError(err)
 
-	err = db.Source(func(db *zdb.Engine) error {
-		err = initTable(db, dbType)
-		zutil.CheckErr(err, true)
+	err = db.Source(func(db *zdb.DB) error {
+		err = testdata.InitTable(db)
+		tt.NoError(err)
 		baseExec(db, tt)
 		baseQuery(db, t, tt)
 		baseTransaction(db, t, tt)
-		_, err = db.Exec(`INSERT INTO ` + table.TableName() + ` (name) VALUES ('Source')`)
-		zutil.CheckErr(err, true)
-		rows, err := db.Query(fmt.Sprintf("select * from %s where name = ?", table.TableName()), "Source")
-		zutil.CheckErr(err, true)
-		rowsMap, err := zdb.ScanToMap(rows)
+		_, err = db.Exec(`INSERT INTO ` + testdata.TestTable.TableName() + ` (name) VALUES ('Source')`)
+		tt.NoError(err)
+		rows, err := db.Query(fmt.Sprintf("select * from %s where name = ?", testdata.TestTable.TableName()), "Source")
+		tt.NoError(err)
+		rowsMap, _, err := zdb.ScanToMap(rows)
 		tt.EqualExit(nil, err)
 		tt.EqualExit(1, len(rowsMap))
 		tt.EqualExit("Source", rowsMap[0]["name"])
@@ -42,26 +49,25 @@ func TestCluster(t *testing.T) {
 		return nil
 	})
 
-	zutil.CheckErr(err, true)
-	err = db.Replica(func(db *zdb.Engine) error {
-		err = initTable(db, dbType)
-		zutil.CheckErr(err, true)
+	tt.NoError(err)
+	err = db.Replica(func(db *zdb.DB) error {
+		err = testdata.InitTable(db)
+		tt.NoError(err)
 		baseExec(db, tt)
 		baseQuery(db, t, tt)
 		baseTransaction(db, t, tt)
-		_, err = db.Exec(`INSERT INTO ` + table.TableName() + ` (name) VALUES ('Replica')`)
-		zutil.CheckErr(err, true)
-		rows, err := db.Query(fmt.Sprintf("select * from %s where name = ?", table.TableName()), "Replica")
-		zutil.CheckErr(err, true)
-		rowsMap, err := zdb.ScanToMap(rows)
+		_, err = db.Exec(`INSERT INTO ` + testdata.TestTable.TableName() + ` (name) VALUES ('Replica')`)
+		tt.NoError(err)
+		rows, err := db.Query(fmt.Sprintf("select * from %s where name = ?", testdata.TestTable.TableName()), "Replica")
+		tt.NoError(err)
+		rowsMap, _, err := zdb.ScanToMap(rows)
 		tt.EqualExit(nil, err)
 		tt.EqualExit(1, len(rowsMap))
 		tt.EqualExit("Replica", rowsMap[0]["name"])
 		t.Log(rowsMap)
 		return nil
 	})
-	zutil.CheckErr(err, true)
-
-	db2 := zdb.DB("c")
+	tt.NoError(err)
+	db2 := zdb.Instance("c")
 	tt.EqualExit(db, db2)
 }

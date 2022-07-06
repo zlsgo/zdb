@@ -22,7 +22,7 @@ var defOption = Options{
 	ConnMaxLifetime: 0,
 }
 
-func (e *Engine) Options(fn func(o *Options)) {
+func (e *DB) Options(fn func(o *Options)) {
 	options := defOption
 	fn(&options)
 	// e.execMaxLifetime = options.ExecMaxLifetime
