@@ -1,7 +1,6 @@
 package mssql
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -24,10 +23,6 @@ func (c *Config) databaseName() string {
 	}
 
 	return c.DBName
-}
-
-func (c *Config) GetVersion() (string, error) {
-	return "", errors.New("can't get the version")
 }
 
 func (c *Config) DataTypeOf(field *schema.Field) string {

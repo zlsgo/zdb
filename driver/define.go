@@ -21,7 +21,6 @@ type Typ int
 type Dialect interface {
 	Value() Typ
 	DataTypeOf(field *schema.Field) string
-	GetVersion() (string, error)
 	HasTable(table string) (sql string, values []interface{}, process func([]map[string]interface{}) bool)
 }
 

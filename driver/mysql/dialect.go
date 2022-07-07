@@ -1,7 +1,6 @@
 package mysql
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -19,10 +18,6 @@ func (c *Config) databaseName() string {
 		c.DBName = tmp
 	}
 	return c.DBName
-}
-
-func (c *Config) GetVersion() (string, error) {
-	return "", errors.New("can't get the version")
 }
 
 func (c *Config) DataTypeOf(field *schema.Field) string {

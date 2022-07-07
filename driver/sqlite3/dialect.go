@@ -1,25 +1,17 @@
 package sqlite3
 
 import (
-	"errors"
-
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/schema"
 )
 
-func (c *Config) GetVersion() (string, error) {
-	// sql := "SELECT SQLITE_VERSION()"
-
-	// data, err := quick.QueryToMap(c.DB(), sql)
-	// if err != nil {
-	// 	return "", err
-	// }
-
-	// if v, ok := data[0]["SQLITE_VERSION()"]; ok {
-	// 	return v.(string), nil
-	// }
-
-	return "", errors.New("can't get the version")
+func (c *Config) GetVersion() (sql string, process func([]map[string]interface{}) string) {
+	return "SELECT SQLITE_VERSION()", func(data []map[string]interface{}) string {
+		if v, ok := data[0]["SQLITE_VERSION()"]; ok {
+			return v.(string)
+		}
+		return ""
+	}
 }
 
 func (c *Config) DataTypeOf(field *schema.Field) string {
