@@ -277,6 +277,18 @@ func convert(out interface{}, rv reflect.Value) error {
 	case reflect.Slice:
 		return handleConvertSlice(out, mvt, vit, &rv)
 	default:
+		if mvt.Kind() == reflect.String && vit.ConvertibleTo(timeType) {
+			t, err := ztime.Parse(out.(string))
+			if err == nil {
+				if vit.AssignableTo(timeType) {
+					rv.Set(reflect.ValueOf(t))
+				} else if vit.AssignableTo(jsontimeType) {
+					rv.Set(reflect.ValueOf(JsonTime(t)))
+				}
+				return nil
+			}
+		}
+
 		return ErrConversionFailed
 	}
 	return nil

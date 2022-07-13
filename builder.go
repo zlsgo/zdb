@@ -1,6 +1,7 @@
 package zdb
 
 import (
+	"errors"
 	"math"
 
 	"github.com/zlsgo/zdb/builder"
@@ -71,9 +72,13 @@ func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBu
 			bui.Offset((page - 1) * pagesize)
 		}
 
-		err := fn(bui)
 		b = bui
-		return err
+
+		if fn != nil {
+			return fn(bui)
+		}
+
+		return nil
 	})
 
 	pages := Pages{
@@ -111,6 +116,10 @@ func (e *DB) FindAll(table string, fn func(b *builder.SelectBuilder) error) ([]m
 
 func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int64, error) {
 	b := builder.Delete(table).SetDriver(e.driver)
+	if fn == nil {
+		return 0, errors.New("delete the condition cannot be empty")
+	}
+
 	if err := fn(b); err != nil {
 		return 0, err
 	}
@@ -121,6 +130,10 @@ func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int6
 func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
 	b := builder.Update(table).SetDriver(e.driver)
 
+	if fn == nil {
+		return 0, errors.New("update the condition cannot be empty")
+	}
+
 	cols, args, err := parseValues(data)
 	if err != nil && err != errNoData {
 		return 0, err
@@ -130,9 +143,13 @@ func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBui
 		cols = e.QuoteCols(cols)
 	}
 
-	for i := 0; i < len(cols); i++ {
-		col := cols[i]
-		b.SetMore(b.Assign(col, args[i][0]))
+	clen := len(cols)
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		for c := 0; c < clen; c++ {
+			col := cols[c]
+			b.SetMore(b.Assign(col, a[c]))
+		}
 	}
 
 	if err := fn(b); err != nil {

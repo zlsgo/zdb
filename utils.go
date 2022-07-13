@@ -13,6 +13,11 @@ import (
 	"github.com/zlsgo/zdb/builder"
 )
 
+var (
+	timeType     = reflect.TypeOf(time.Time{})
+	jsontimeType = reflect.TypeOf(JsonTime{})
+)
+
 func (j JsonTime) String() string {
 	t := time.Time(j)
 	if t.IsZero() {

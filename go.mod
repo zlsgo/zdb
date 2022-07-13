@@ -7,8 +7,8 @@ require (
 	github.com/glebarez/go-sqlite v1.17.3
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/lib/pq v1.10.6
-	github.com/mattn/go-sqlite3 v1.14.13
-	github.com/sohaha/zlsgo v1.3.4
+	github.com/mattn/go-sqlite3 v1.14.14
+	github.com/sohaha/zlsgo v1.3.5
 )
 
 require (
@@ -18,8 +18,8 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b // indirect
-	golang.org/x/sys v0.0.0-20220405052023-b1e9470b6e64 // indirect
-	modernc.org/libc v1.16.8 // indirect
+	golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e // indirect
+	modernc.org/libc v1.16.17 // indirect
 	modernc.org/mathutil v1.4.1 // indirect
 	modernc.org/memory v1.1.1 // indirect
 	modernc.org/sqlite v1.17.3 // indirect

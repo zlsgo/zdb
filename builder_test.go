@@ -13,7 +13,6 @@ type user struct {
 	Name string `json:"name"`
 	Age  int    `json:"age"`
 	ID   string `json:"id"`
-	dd   string
 }
 
 func TestBuilder(t *testing.T) {
@@ -89,7 +88,7 @@ func TestBuilder(t *testing.T) {
 	tt.NoError(err)
 	t.Log(u)
 
-	i, err := db.Update(table, zdb.QuoteCols(map[string]interface{}{"name": "new name"}), func(b *builder.UpdateBuilder) error {
+	i, err := db.Update(table, zdb.QuoteCols(map[string]interface{}{"name": "new name", "age": 66}), func(b *builder.UpdateBuilder) error {
 		b.Where(b.EQ("id", 1))
 		t.Log(b.Build())
 		t.Log(33)
