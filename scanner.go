@@ -45,6 +45,7 @@ var (
 
 	errNoData      = errors.New("no data")
 	errInsertEmpty = errors.New("insert data can not be empty")
+	errDataInvalid = errors.New("data is illegal")
 )
 
 func Scan(rows IfeRows, out interface{}) (int, error) {

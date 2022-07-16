@@ -8,9 +8,17 @@ import (
 )
 
 func (e *DB) Insert(table string, data interface{}) (lastId int64, err error) {
+	return e.insert(table, data, parseAll)
+}
+
+func (e *DB) InsertMaps(table string, data interface{}) (lastId int64, err error) {
+	return e.insert(table, data, parseValues)
+}
+
+func (e *DB) insert(table string, data interface{}, parseFn func(data interface{}) (cols []string, args [][]interface{}, err error)) (lastId int64, err error) {
 	b := builder.Insert(table).SetDriver(e.driver)
 
-	cols, args, err := parseValues(data)
+	cols, args, err := parseFn(data)
 	if err != nil {
 		return 0, err
 	}
@@ -127,14 +135,14 @@ func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int6
 	return parseExec(e, b)
 }
 
-func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
+func (e *DB) update(table string, data interface{}, parseFn func(data interface{}) (cols []string, args [][]interface{}, err error), fn func(b *builder.UpdateBuilder) error) (int64, error) {
 	b := builder.Update(table).SetDriver(e.driver)
 
 	if fn == nil {
 		return 0, errors.New("update the condition cannot be empty")
 	}
 
-	cols, args, err := parseValues(data)
+	cols, args, err := parseFn(data)
 	if err != nil && err != errNoData {
 		return 0, err
 	}
@@ -157,4 +165,12 @@ func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBui
 	}
 
 	return parseExec(e, b)
+}
+
+func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
+	return e.update(table, data, parseAll, fn)
+}
+
+func (e *DB) UpdateMaps(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
+	return e.update(table, data, parseValues, fn)
 }

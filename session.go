@@ -77,6 +77,7 @@ func (s *Session) execContext(ctx context.Context, query string, args ...interfa
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 	return stmt.ExecContext(ctx, args...)
 }
 
@@ -85,6 +86,7 @@ func (s *Session) queryContext(ctx context.Context, query string, args ...interf
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 	return stmt.QueryContext(ctx, args...)
 }
 

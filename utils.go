@@ -14,8 +14,10 @@ import (
 )
 
 var (
-	timeType     = reflect.TypeOf(time.Time{})
-	jsontimeType = reflect.TypeOf(JsonTime{})
+	timeType        = reflect.TypeOf(time.Time{})
+	jsontimeType    = reflect.TypeOf(JsonTime{})
+	timePtrType     = reflect.TypeOf(&time.Time{})
+	jsontimePtrType = reflect.TypeOf(&JsonTime{})
 )
 
 func (j JsonTime) String() string {
@@ -100,6 +102,16 @@ func parseValues(data interface{}) (cols []string, args [][]interface{}, err err
 	switch val := data.(type) {
 	case *QuoteData:
 		return parseValues(val.data)
+	case map[string]string:
+		l := len(val)
+		cols = make([]string, 0, l)
+		colArgs := make([]interface{}, 0, l)
+		for key := range val {
+			v := val[key]
+			cols = append(cols, key)
+			colArgs = append(colArgs, v)
+		}
+		args = append(args, colArgs)
 	case map[string]interface{}:
 		l := len(val)
 		cols = make([]string, 0, l)
@@ -137,7 +149,7 @@ func parseValues(data interface{}) (cols []string, args [][]interface{}, err err
 			}
 		}
 	default:
-		err = errors.New("insert data is illegal")
+		err = errDataInvalid
 	}
 
 	return cols, args, err
@@ -175,5 +187,13 @@ func parseStruct(data interface{}) (cols []string, args [][]interface{}, err err
 	}
 
 	err = errors.New("insert data is illegal")
+	return
+}
+
+func parseAll(data interface{}) (cols []string, args [][]interface{}, err error) {
+	cols, args, err = parseValues(data)
+	if err != nil && err == errDataInvalid {
+		cols, args, err = parseStruct(data)
+	}
 	return
 }
