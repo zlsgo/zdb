@@ -75,8 +75,8 @@ func (c *Config) DataTypeOf(field *schema.Field) string {
 	return string(field.DataType)
 }
 
-func (c *Config) HasTable(table string) (sql string, values []interface{}, process func(result []map[string]interface{}) bool) {
-	return "SELECT count(*) AS count FROM information_schema.tables WHERE table_schema = ? AND table_name = ? AND table_type = ?", []interface{}{c.databaseName(), table, "BASE TABLE"}, func(data []map[string]interface{}) bool {
+func (c *Config) HasTable(table string) (sql string, values []interface{}, process func(result []ztype.Map) bool) {
+	return "SELECT count(*) AS count FROM information_schema.tables WHERE table_schema = ? AND table_name = ? AND table_type = ?", []interface{}{c.databaseName(), table, "BASE TABLE"}, func(data []ztype.Map) bool {
 		if len(data) > 0 {
 			return ztype.ToInt64(data[0]["count"]) > 0
 		}

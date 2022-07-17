@@ -1,6 +1,8 @@
 package zdb
 
-func (e *DB) QueryToMaps(query string, args ...interface{}) ([]map[string]interface{}, error) {
+import "github.com/sohaha/zlsgo/ztype"
+
+func (e *DB) QueryToMaps(query string, args ...interface{}) ([]ztype.Map, error) {
 	db, err := e.getSession(nil, false)
 	if err != nil {
 		return nil, err

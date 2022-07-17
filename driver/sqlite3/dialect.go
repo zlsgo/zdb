@@ -5,8 +5,8 @@ import (
 	"github.com/zlsgo/zdb/schema"
 )
 
-func (c *Config) GetVersion() (sql string, process func([]map[string]interface{}) string) {
-	return "SELECT SQLITE_VERSION()", func(data []map[string]interface{}) string {
+func (c *Config) GetVersion() (sql string, process func([]ztype.Map) string) {
+	return "SELECT SQLITE_VERSION()", func(data []ztype.Map) string {
 		if v, ok := data[0]["SQLITE_VERSION()"]; ok {
 			return v.(string)
 		}
@@ -33,8 +33,8 @@ func (c *Config) DataTypeOf(field *schema.Field) string {
 	return string(field.DataType)
 }
 
-func (c *Config) HasTable(table string) (sql string, values []interface{}, process func(result []map[string]interface{}) bool) {
-	return "SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?", []interface{}{table}, func(data []map[string]interface{}) bool {
+func (c *Config) HasTable(table string) (sql string, values []interface{}, process func(result []ztype.Map) bool) {
+	return "SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?", []interface{}{table}, func(data []ztype.Map) bool {
 		if len(data) > 0 {
 			return ztype.ToInt64(data[0]["count"]) > 0
 		}

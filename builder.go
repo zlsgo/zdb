@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/builder"
 )
 
@@ -50,7 +51,7 @@ func (e *DB) insert(table string, data interface{}, parseFn func(data interface{
 	return result.LastInsertId()
 }
 
-func (e *DB) Find(table string, fn func(b *builder.SelectBuilder) error) (map[string]interface{}, error) {
+func (e *DB) Find(table string, fn func(b *builder.SelectBuilder) error) (ztype.Map, error) {
 	resultMap, err := e.FindAll(table, func(sb *builder.SelectBuilder) error {
 		sb.Limit(1)
 		if fn == nil {
@@ -72,7 +73,7 @@ type Pages struct {
 	Curpage uint `json:"curpage"`
 }
 
-func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBuilder) error) ([]map[string]interface{}, Pages, error) {
+func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBuilder) error) ([]ztype.Map, Pages, error) {
 	var b *builder.SelectBuilder
 	resultMap, err := e.FindAll(table, func(bui *builder.SelectBuilder) error {
 		bui.Limit(pagesize)
@@ -110,7 +111,7 @@ func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBu
 	return resultMap, pages, err
 }
 
-func (e *DB) FindAll(table string, fn func(b *builder.SelectBuilder) error) ([]map[string]interface{}, error) {
+func (e *DB) FindAll(table string, fn func(b *builder.SelectBuilder) error) ([]ztype.Map, error) {
 	b := builder.Query(table).SetDriver(e.driver)
 
 	if fn != nil {

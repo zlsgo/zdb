@@ -3,6 +3,7 @@ package driver
 import (
 	"database/sql"
 
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/schema"
 )
 
@@ -21,7 +22,7 @@ type Typ int
 type Dialect interface {
 	Value() Typ
 	DataTypeOf(field *schema.Field) string
-	HasTable(table string) (sql string, values []interface{}, process func([]map[string]interface{}) bool)
+	HasTable(table string) (sql string, values []interface{}, process func([]ztype.Map) bool)
 }
 
 const (

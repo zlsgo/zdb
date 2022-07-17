@@ -10,6 +10,7 @@ import (
 
 	"github.com/sohaha/zlsgo/zreflect"
 	"github.com/sohaha/zlsgo/zstring"
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/builder"
 )
 
@@ -67,7 +68,7 @@ func (e *DB) QuoteCols(cols []string) []string {
 	return nm
 }
 
-func parseQuery(e *DB, b builder.Builder) ([]map[string]interface{}, error) {
+func parseQuery(e *DB, b builder.Builder) ([]ztype.Map, error) {
 	sql, values := b.Build()
 
 	rows, err := e.Query(sql, values...)
@@ -77,7 +78,7 @@ func parseQuery(e *DB, b builder.Builder) ([]map[string]interface{}, error) {
 
 	result, total, err := ScanToMap(rows)
 	if total == 0 {
-		return []map[string]interface{}{}, ErrRecordNotFound
+		return []ztype.Map{}, ErrRecordNotFound
 	}
 
 	return result, err

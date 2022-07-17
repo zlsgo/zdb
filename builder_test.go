@@ -66,6 +66,8 @@ func TestBuilder(t *testing.T) {
 	})
 	tt.NoError(err)
 	t.Log(row)
+	t.Log(row["name"].(string), row.Get("name").String())
+	tt.Equal(row["name"].(string), row.Get("name").String())
 
 	rows, err := db.FindAll(table, func(sb *builder.SelectBuilder) error {
 		sb.Where(sb.GE("id", 1))

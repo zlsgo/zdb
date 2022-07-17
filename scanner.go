@@ -12,6 +12,7 @@ import (
 
 	"github.com/sohaha/zlsgo/zstring"
 	"github.com/sohaha/zlsgo/ztime"
+	"github.com/sohaha/zlsgo/ztype"
 )
 
 type (
@@ -59,7 +60,7 @@ func Scan(rows IfeRows, out interface{}) (int, error) {
 	return count, scan(data, out)
 }
 
-func scan(data []map[string]interface{}, out interface{}) (err error) {
+func scan(data []ztype.Map, out interface{}) (err error) {
 	targetValueOf := reflect.ValueOf(out)
 	if nil == out || targetValueOf.Kind() != reflect.Ptr || targetValueOf.IsNil() {
 		return ErrTargetNotSettable
@@ -77,11 +78,11 @@ func scan(data []map[string]interface{}, out interface{}) (err error) {
 }
 
 // ScanToMap returns the result in the form of []map[string]interface{}
-func ScanToMap(rows IfeRows) ([]map[string]interface{}, int, error) {
+func ScanToMap(rows IfeRows) ([]ztype.Map, int, error) {
 	return resolveDataFromRows(rows)
 }
 
-func bindSlice(arr []map[string]interface{}, elem reflect.Value) error {
+func bindSlice(arr []ztype.Map, elem reflect.Value) error {
 	if !elem.CanSet() {
 		return ErrTargetNotSettable
 	}
@@ -171,8 +172,8 @@ func isFloatSeriesType(k reflect.Kind) bool {
 	return k == reflect.Float32 || k == reflect.Float64
 }
 
-func resolveDataFromRows(rows IfeRows) ([]map[string]interface{}, int, error) {
-	result := make([]map[string]interface{}, 0)
+func resolveDataFromRows(rows IfeRows) ([]ztype.Map, int, error) {
+	result := make([]ztype.Map, 0)
 	if nil == rows {
 		return result, 0, ErrNilRows
 	}
@@ -192,7 +193,7 @@ func resolveDataFromRows(rows IfeRows) ([]map[string]interface{}, int, error) {
 		if err != nil {
 			return result, 0, err
 		}
-		entry := make(map[string]interface{}, length)
+		entry := make(ztype.Map, length)
 		for i, col := range columns {
 			val := values[i]
 			b, ok := val.([]byte)

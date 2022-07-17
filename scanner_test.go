@@ -1,6 +1,8 @@
 package zdb
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestScan(t *testing.T) {
 	m := []map[string]interface{}{
@@ -14,6 +16,7 @@ func TestScan(t *testing.T) {
 		Name string   `json:"name"`
 		Date JsonTime `json:"Date"`
 	}
-	t.Log(scan(m, &r))
+
+	// t.Log(scan([]ztype.Map{ztype.Map(m)}, &r))
 	t.Log(r)
 }

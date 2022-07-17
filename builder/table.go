@@ -3,6 +3,7 @@ package builder
 import (
 	"strings"
 
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 	"github.com/zlsgo/zdb/schema"
@@ -57,7 +58,7 @@ func (b *TableBuilder) Drop() string {
 }
 
 // Has queried whether the table exists
-func (b *TableBuilder) Has() (sql string, values []interface{}, process func(result []map[string]interface{}) bool) {
+func (b *TableBuilder) Has() (sql string, values []interface{}, process func(result []ztype.Map) bool) {
 	return b.args.driver.HasTable(b.table)
 }
 
