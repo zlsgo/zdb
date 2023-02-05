@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sohaha/zlsgo/zstring"
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/schema"
 )
@@ -25,59 +26,116 @@ func (c *Config) databaseName() string {
 	return c.DBName
 }
 
-func (c *Config) DataTypeOf(field *schema.Field) string {
-	switch field.DataType {
+func autoIncrement(f *schema.Field, sqlType string) string {
+	if f.AutoIncrement {
+		if f.Size == 0 {
+			sqlType = "bigint"
+		}
+		return sqlType + " IDENTITY(1,1)"
+	} else {
+		return sqlType
+	}
+}
+func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
+	t := zstring.Buffer()
+	switch f.DataType {
 	case schema.Bool:
-		return "bit"
-	case schema.Int, schema.Uint:
-		var sqlType string
+		t.WriteString("bit")
+	case schema.Uint:
+		size, sqlType := f.Size, ""
 		switch {
-		case field.Size < 16:
+		case size == 0:
+			sqlType = "int"
+		case size <= 255:
 			sqlType = "smallint"
-		case field.Size < 31:
+		case size <= 65535:
 			sqlType = "int"
 		default:
 			sqlType = "bigint"
 		}
+		t.WriteString(autoIncrement(f, sqlType))
+	case schema.Int:
+		size, sqlType := f.Size, ""
+		switch {
+		case size == 0:
+			sqlType = "int"
+		case size < 127:
+			sqlType = "smallint"
+		case size < 32767:
+			sqlType = "int"
+		default:
+			sqlType = "bigint"
+		}
+		t.WriteString(autoIncrement(f, sqlType))
 
-		if field.AutoIncrement {
-			return sqlType + " IDENTITY(1,1)"
-		}
-		return sqlType
 	case schema.Float:
-		if field.Precision > 0 {
-			if field.Scale > 0 {
-				return fmt.Sprintf("decimal(%d, %d)", field.Precision, field.Scale)
+		if f.Precision > 0 {
+			if f.Scale > 0 {
+				t.WriteString(fmt.Sprintf("decimal(%d, %d)", f.Precision, f.Scale))
+			} else {
+				t.WriteString(fmt.Sprintf("decimal(%d)", f.Precision))
 			}
-			return fmt.Sprintf("decimal(%d)", field.Precision)
+		} else {
+			t.WriteString("float")
 		}
-		return "float"
 	case schema.String:
-		size := field.Size
+		size := f.Size
 		if size == 0 {
 			size = 256
 		}
 		if size > 0 && size <= 4000 {
-			return fmt.Sprintf("nvarchar(%d)", size)
+			t.WriteString(fmt.Sprintf("nvarchar(%d)", size))
+		} else {
+			t.WriteString("nvarchar(MAX)")
 		}
-		return "nvarchar(MAX)"
 	case schema.Time:
-		if field.Precision > 0 {
-			return fmt.Sprintf("datetimeoffset(%d)", field.Precision)
+		if f.Precision > 0 {
+			t.WriteString(fmt.Sprintf("datetimeoffset(%d)", f.Precision))
+		} else {
+
+			t.WriteString("datetimeoffset")
 		}
-		return "datetimeoffset"
 	case schema.Bytes:
-		return "varbinary(MAX)"
+		t.WriteString("varbinary(MAX)")
+	default:
+		t.WriteString(string(f.DataType))
 	}
 
-	return string(field.DataType)
+	return t.String()
 }
 
-func (c *Config) HasTable(table string) (sql string, values []interface{}, process func(result []ztype.Map) bool) {
-	return "SELECT count(*) AS count FROM INFORMATION_SCHEMA.tables WHERE table_name = ? AND table_catalog = ?", []interface{}{table, c.databaseName()}, func(data []ztype.Map) bool {
+func (c *Config) HasTable(table string) (sql string, values []interface{}, process func(result ztype.Maps) bool) {
+	return "SELECT count(*) AS count FROM INFORMATION_SCHEMA.tables WHERE table_name = ? AND table_catalog = ?", []interface{}{table, c.databaseName()}, func(data ztype.Maps) bool {
 		if len(data) > 0 {
 			return ztype.ToInt64(data[0]["count"]) > 0
 		}
 		return false
 	}
+}
+
+func (c *Config) GetColumn(table string) (sql string, values []interface{}, process func(result ztype.Maps) ztype.Map) {
+	return "", []interface{}{}, func(data ztype.Maps) ztype.Map {
+		return ztype.Map{}
+	}
+}
+
+func (c *Config) RenameColumn(table, oldName, newName string) (sql string, values []interface{}) {
+	return "ALTER TABLE ? RENAME COLUMN ? TO ?", []interface{}{table, oldName, newName}
+}
+
+func (c *Config) HasIndex(table, name string) (sql string, values []interface{}, process func(ztype.Maps) bool) {
+	return "SELECT count(*) FROM sys.indexes WHERE name=? AND object_id=OBJECT_ID(?)", []interface{}{name, table}, func(data ztype.Maps) bool {
+		if len(data) > 0 {
+			return ztype.ToInt64(data[0]["count"]) > 0
+		}
+		return false
+	}
+}
+
+func (c *Config) CreateIndex(table, name string, columns []string, indexType string) (sql string, values []interface{}) {
+	panic("待实现")
+}
+
+func (c *Config) RenameIndex(table, oldName, newName string) (sql string, values []interface{}) {
+	panic("implement me")
 }

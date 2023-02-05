@@ -56,18 +56,18 @@ func TestCreateTableQuick(t *testing.T) {
 		_ = d
 		b.SetDriver(dialect)
 
-		b.Column(schema.NewField("id", uint8(0), func(field *schema.Field) {
+		b.Column(schema.NewFieldForValue("id", uint8(0), func(field *schema.Field) {
 			field.PrimaryKey = true
 			field.Comment = "ID"
 		}))
 
-		b.Column(schema.NewField("name", "", func(field *schema.Field) {
+		b.Column(schema.NewFieldForValue("name", "", func(field *schema.Field) {
 			field.Size = 100
 			field.NotNull = false
 			field.Comment = "用户名"
 		}))
 
-		b.Column(schema.NewField("created_at", time.Time{}, func(field *schema.Field) {
+		b.Column(schema.NewFieldForValue("created_at", time.Time{}, func(field *schema.Field) {
 			field.Size = 100
 			field.Comment = "创建时间"
 		}))
@@ -110,9 +110,9 @@ func TestHasTable(t *testing.T) {
 
 	{
 		table = builder.NewTable("shop")
-		table.SetDriver(&mysql.Config{
-			Dsn: "root:root@(127.0.0.1:3306)/test?charset=utf8mb4&parseTime=True&loc=Local",
-		})
+		m := &mysql.Config{}
+		m.SetDsn("root:root@(127.0.0.1:3306)/test?charset=utf8mb4&parseTime=True&loc=Local")
+		table.SetDriver(m)
 		sql, values, _ = table.Has()
 		tt.Equal("SELECT count(*) AS count FROM information_schema.tables WHERE table_schema = ? AND table_name = ? AND table_type = ?", sql)
 		tt.Equal([]interface{}{"test", "shop", "BASE TABLE"}, values)
@@ -120,19 +120,19 @@ func TestHasTable(t *testing.T) {
 
 	{
 		table = builder.NewTable("shop")
-		table.SetDriver(&postgres.Config{
-			Dsn: "host=192.168.3.378 port=5432 user=postgres password=12345678 dbname=test sslmode=disable",
-		})
+		m := &postgres.Config{}
+		m.SetDsn("host=192.168.3.378 port=5432 user=postgres password=12345678 dbname=test sslmode=disable")
+		table.SetDriver(m)
 		sql, values, _ = table.Has()
-		tt.Equal("SELECT count(*) AS count FROM information_schema.tables WHERE table_schema = ? AND table_name = ? AND table_type = ?", sql)
-		tt.Equal([]interface{}{"test", "shop", "BASE TABLE"}, values)
+		tt.Equal("SELECT count(*) AS count FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2 AND table_type = $3 AND table_catalog = $4", sql)
+		tt.Equal([]interface{}{"public", "shop", "BASE TABLE", "test"}, values)
 	}
 
 	{
 		table = builder.NewTable("shop")
-		table.SetDriver(&mssql.Config{
-			Dsn: "sqlserver://mssql:12345678@localhost:9930?database=test",
-		})
+		m := &mssql.Config{}
+		m.SetDsn("sqlserver://mssql:12345678@localhost:9930?database=test")
+		table.SetDriver(m)
 		sql, values, _ = table.Has()
 		tt.Equal("SELECT count(*) AS count FROM INFORMATION_SCHEMA.tables WHERE table_name = ? AND table_catalog = ?", sql)
 		tt.Equal([]interface{}{"shop", "test"}, values)

@@ -67,8 +67,10 @@ func (e *DB) getSession(s *Session, master bool, ctx ...context.Context) (*Sessi
 }
 
 func (s *Session) execContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	var err error
-	var stmt *sql.Stmt
+	var (
+		err  error
+		stmt *sql.Stmt
+	)
 	if s.tx != nil {
 		stmt, err = s.tx.PrepareContext(ctx, query)
 	} else {

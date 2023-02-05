@@ -22,8 +22,8 @@ func (c *Cond) EQ(field string, value interface{}) string {
 	return Escape(field) + " = " + c.Args.Map(value)
 }
 
-// NotEQ represents "Field != value"
-func (c *Cond) NotEQ(field string, value interface{}) string {
+// NE represents "Field != value"
+func (c *Cond) NE(field string, value interface{}) string {
 	return Escape(field) + " <> " + c.Args.Map(value)
 }
 

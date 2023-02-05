@@ -1,8 +1,10 @@
 package builder
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/lib/pq"
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -42,6 +44,23 @@ func (b *TableBuilder) SetDriver(driver driver.Dialect) {
 	b.args.driver = driver
 }
 
+func (b *TableBuilder) GetDriver() driver.Dialect {
+	return b.args.driver
+}
+
+// Drop delete table
+func (b *TableBuilder) tableName() string {
+	typ := b.args.driver.Value()
+	switch typ {
+	case driver.PostgreSQL:
+		if !strings.ContainsRune(b.table, '.') {
+			return pq.QuoteIdentifier(b.table)
+		}
+	}
+
+	return b.table
+}
+
 // Create creates a new CREATE TABLE builder
 func (b *TableBuilder) Create() *CreateTableBuilder {
 	table := NewTable(b.table)
@@ -54,12 +73,41 @@ func (b *TableBuilder) Create() *CreateTableBuilder {
 
 // Drop delete table
 func (b *TableBuilder) Drop() string {
-	return "DROP TABLE " + b.table
+	return "DROP TABLE " + b.tableName()
 }
 
 // Has queried whether the table exists
-func (b *TableBuilder) Has() (sql string, values []interface{}, process func(result []ztype.Map) bool) {
+func (b *TableBuilder) Has() (sql string, values []interface{}, process func(result ztype.Maps) bool) {
 	return b.args.driver.HasTable(b.table)
+}
+
+// HasIndex queried whether the table index exists
+func (b *TableBuilder) HasIndex(name string) (sql string, values []interface{}, process func(result ztype.Maps) bool) {
+	return b.args.driver.HasIndex(b.table, name)
+}
+
+func (b *TableBuilder) CreateIndex(name string, columns []string, indexType string) (sql string, values []interface{}) {
+	return b.args.driver.CreateIndex(b.table, name, columns, indexType)
+}
+
+// GetColumn return table column
+func (b *TableBuilder) GetColumn() (sql string, values []interface{}, process func(result ztype.Maps) ztype.Map) {
+	return b.args.driver.GetColumn(b.table)
+}
+
+// RenameColumn rename table column
+func (b *TableBuilder) RenameColumn(oldName, newName string) (sql string, values []interface{}) {
+	return b.args.driver.RenameColumn(b.table, oldName, newName)
+}
+
+func (b *TableBuilder) AddColumn(name string, dataType schema.DataType, fieldOption ...func(*schema.Field)) (sql string, values []interface{}) {
+	f := schema.NewField(name, dataType, fieldOption...)
+	t := b.args.driver.DataTypeOf(f)
+	return fmt.Sprintf("ALTER TABLE %s ADD %s %s", b.table, name, t), []interface{}{}
+}
+
+func (b *TableBuilder) DropColumn(name string) (sql string, values []interface{}) {
+	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", b.table, name), []interface{}{}
 }
 
 // CreateTable creates a new CREATE TABLE builder
@@ -109,7 +157,7 @@ func (b *CreateTableBuilder) buildColumns() {
 		return
 	}
 
-	typ := b.args.driver.Value()
+	// typ := b.args.driver.Value()
 	columns := make([][]string, 0, l)
 
 	for _, f := range b.columns {
@@ -117,22 +165,6 @@ func (b *CreateTableBuilder) buildColumns() {
 
 		def = append(def, f.Name)
 		def = append(def, b.args.driver.DataTypeOf(f))
-
-		if f.NotNull && !f.PrimaryKey {
-			def = append(def, "NOT NULL")
-		}
-
-		if f.AutoIncrement {
-			def = append(def, "AUTO_INCREMENT")
-		}
-
-		if f.PrimaryKey {
-			def = append(def, "PRIMARY KEY")
-		}
-
-		if len(f.Comment) > 0 && typ == driver.MySQL {
-			def = append(def, "COMMENT '"+f.Comment+"'")
-		}
 
 		columns = append(columns, def)
 	}
@@ -152,7 +184,7 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}) {
 	}
 
 	buf.WriteRune(' ')
-	buf.WriteString(b.table)
+	buf.WriteString(b.tableName())
 
 	b.buildColumns()
 	if len(b.defines) > 0 {

@@ -131,14 +131,20 @@ func (b *SelectBuilder) OrderBy(col ...string) *SelectBuilder {
 }
 
 // Asc sets order of ORDER BY to ASC
-func (b *SelectBuilder) Asc() *SelectBuilder {
+func (b *SelectBuilder) Asc(col ...string) *SelectBuilder {
 	b.order = "ASC"
+	if len(col) > 0 {
+		b.orderByCols = col
+	}
 	return b
 }
 
 // Desc sets order of ORDER BY to DESC
-func (b *SelectBuilder) Desc() *SelectBuilder {
+func (b *SelectBuilder) Desc(col ...string) *SelectBuilder {
 	b.order = "DESC"
+	if len(col) > 0 {
+		b.orderByCols = col
+	}
 	return b
 }
 

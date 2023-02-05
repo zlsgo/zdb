@@ -18,7 +18,7 @@ var (
 type Config struct {
 	driver.Typ
 	db         *sql.DB
-	Dsn        string
+	dsn        string
 	Host       string
 	Port       int
 	User       string
@@ -44,12 +44,17 @@ func (c *Config) SetDB(db *sql.DB) {
 	c.db = db
 }
 
+func (c *Config) SetDsn(dsn string) {
+	c.dsn = dsn
+}
+
 func (c *Config) GetDsn() string {
-	if c.Dsn != "" {
-		return c.Dsn
+	if c.dsn != "" {
+		return c.dsn
 	}
-	return fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s?%s",
+	c.dsn = fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s?%s",
 		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 1433, c.Port), c.DBName, c.Parameters)
+	return c.dsn
 }
 
 func (c *Config) GetDriver() string {

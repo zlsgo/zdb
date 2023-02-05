@@ -15,7 +15,7 @@ var _ driver.Dialect = &Config{}
 type Config struct {
 	driver.Typ
 	File        string
-	Dsn         string
+	dsn         string
 	Parameters  string
 	db          *sql.DB
 	Memory      bool
@@ -42,16 +42,21 @@ func (c *Config) SetDB(db *sql.DB) {
 	c.db = db
 }
 
+func (c *Config) SetDsn(dsn string) {
+	c.dsn = dsn
+}
+
 func (c *Config) GetDsn() string {
-	if c.Dsn != "" {
-		return c.Dsn
+	if c.dsn == "" {
+		c.Typ = driver.SQLite
+		f := c.File
+		if f == "" {
+			f = "zlsgo.db"
+		}
+		c.dsn = "file:" + zfile.RealPath(f) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "?").(string) + "&" + c.Parameters
 	}
-	c.Typ = driver.SQLite
-	f := c.File
-	if f == "" {
-		f = "zlsgo.db"
-	}
-	return "file:" + zfile.RealPath(f) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "?").(string) + "&" + c.Parameters
+
+	return c.dsn
 }
 
 func (c *Config) Value() driver.Typ {

@@ -100,3 +100,25 @@ func TestSelectComplex(t *testing.T) {
 	sql := sb.String()
 	tt.Log(sql)
 }
+
+func TestSelectOther(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("id", "username", "group_id").From("user")
+	sb.SetDriver(&postgres.Config{})
+	sb.Where(sb.GE("age", dbsql.Named("age", 18)), sb.Or(sb.EQ("id", 1), sb.EQ("id", 108)))
+	sb.OrderBy("id").OrderBy("username").Asc()
+	sb.GroupBy("group_id")
+	sb.Having(sb.GE("group_id", 1))
+	sb.Limit(5).Offset(2)
+	sb.Distinct()
+
+	more := (func(c builder.Cond) []string {
+		return []string{c.NE("id", 99)}
+	})(sb.Cond)
+
+	sb.Where(more...)
+
+	sql, values := sb.Build()
+	tt.Log(sql, values)
+}

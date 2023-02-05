@@ -5,12 +5,14 @@ import (
 
 	"github.com/sohaha/zlsgo"
 	"github.com/zlsgo/zdb/builder"
+	"github.com/zlsgo/zdb/driver/postgres"
 )
 
 func TestInsert(t *testing.T) {
 	tt := zlsgo.NewTest(t)
 
 	sb := builder.Insert("user")
+	sb.SetDriver(&postgres.Config{})
 	sb.Cols("username", "age").Values("new user", 18)
 
 	sql, values := sb.Build()

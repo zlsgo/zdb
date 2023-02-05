@@ -33,16 +33,12 @@ var (
 	BindTag = "zdb"
 	// ErrTargetNotSettable means the second param of Bind is not settable
 	ErrTargetNotSettable = errors.New("target is not settable! a pointer is required")
-	// ErrNilRows means the first param can't be a nil
-	ErrNilRows = errors.New("rows can't be nil")
 	// ErrSliceToString means only []uint8 can be transmuted into string
 	ErrSliceToString = errors.New("can't transmute a non-uint8 slice to string")
 	// ErrConversionFailed conversion failed
 	ErrConversionFailed = errors.New("conversion failed")
 	// ErrDBNotExist db not exist
 	ErrDBNotExist = errors.New("database instance does not exist")
-	// ErrRecordNotFound no records found
-	ErrRecordNotFound = errors.New("no records found")
 
 	errNoData      = errors.New("no data")
 	errInsertEmpty = errors.New("insert data can not be empty")
@@ -55,7 +51,7 @@ func Scan(rows IfeRows, out interface{}) (int, error) {
 		return 0, err
 	}
 	if nil == data {
-		return count, ErrRecordNotFound
+		return count, ErrNotFound
 	}
 	return count, scan(data, out)
 }
@@ -175,7 +171,7 @@ func isFloatSeriesType(k reflect.Kind) bool {
 func resolveDataFromRows(rows IfeRows) ([]ztype.Map, int, error) {
 	result := make([]ztype.Map, 0)
 	if nil == rows {
-		return result, 0, ErrNilRows
+		return result, 0, ErrNotFound
 	}
 	columns, err := rows.Columns()
 	if nil != err {

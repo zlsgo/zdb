@@ -14,7 +14,7 @@ func TestCond(t *testing.T) {
 		"$0":                      func() string { return builder.NewCond().Var(1) },
 		"a = $0":                  func() string { return builder.NewCond().EQ("a", 1) },
 		"$$a = $0":                func() string { return builder.NewCond().EQ("$a", 1) },
-		"a <> $0":                 func() string { return builder.NewCond().NotEQ("a", 1) },
+		"a <> $0":                 func() string { return builder.NewCond().NE("a", 1) },
 		"a > $0":                  func() string { return builder.NewCond().GT("a", 1) },
 		"a >= $0":                 func() string { return builder.NewCond().GE("a", 1) },
 		"a < $0":                  func() string { return builder.NewCond().LT("a", 1) },
@@ -34,3 +34,13 @@ func TestCond(t *testing.T) {
 		tt.Equal(expected, fn())
 	}
 }
+
+// func TestCondAppend(t *testing.T) {
+// 	tt := zlsgo.NewTest(t)
+
+// 	cond := builder.NewCond()
+
+// 	t.Log(cond.EQ("a", 1))
+// 	t.Log(cond.NE("a", 1))
+// 	tt.Log(cond.Args)
+// }

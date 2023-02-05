@@ -35,14 +35,14 @@ func TestBuilder(t *testing.T) {
 
 	table := testdata.TestTable.TableName()
 
-	id, err := db.Insert(table, data)
+	id, err := db.InsertAny(table, data)
 	tt.NoError(err)
 	t.Log(id)
 
 	_ = db.Source(func(e *zdb.DB) error {
 		t.Log(&db, &e)
 		t.Logf("%+v %+v\n", db, e)
-		id, err = e.Insert(table, map[string]interface{}{
+		id, err = e.InsertAny(table, map[string]interface{}{
 			"name":  "ok",
 			"is_ok": 100,
 		})
@@ -51,15 +51,15 @@ func TestBuilder(t *testing.T) {
 		return nil
 	})
 
-	id, err = db.Insert(table, []map[string]interface{}{data, data, {"name": "test2", "age": 999, "xx": "xx"}})
+	id, err = db.InsertAny(table, []map[string]interface{}{data, data, {"name": "test2", "age": 999, "xx": "xx"}})
 	tt.NoError(err)
 	t.Log(id)
 
-	_, err = db.Insert(table, []map[string]interface{}{data, {"xx": "xx"}})
+	_, err = db.InsertAny(table, []map[string]interface{}{data, {"xx": "xx"}})
 	tt.EqualTrue(err != nil)
 	t.Log(err)
 
-	row, err := db.Find(table, func(sb *builder.SelectBuilder) error {
+	row, err := db.FindOne(table, func(sb *builder.SelectBuilder) error {
 		sb.Where(sb.GE("is_ok", 1))
 		t.Log(sb.String())
 		return nil
@@ -69,7 +69,7 @@ func TestBuilder(t *testing.T) {
 	t.Log(row["name"].(string), row.Get("name").String())
 	tt.Equal(row["name"].(string), row.Get("name").String())
 
-	rows, err := db.FindAll(table, func(sb *builder.SelectBuilder) error {
+	rows, err := db.Find(table, func(sb *builder.SelectBuilder) error {
 		sb.Where(sb.GE("id", 1))
 		t.Log(sb.String())
 		return nil
@@ -129,14 +129,14 @@ func TestFindComplex(t *testing.T) {
 	childTable := builder.Select().From("user")
 	childTable.Where(childTable.GE("id", 1))
 
-	_, err = db.Find(testdata.TestTable.TableName(), func(sb *builder.SelectBuilder) error {
+	_, err = db.FindOne(testdata.TestTable.TableName(), func(sb *builder.SelectBuilder) error {
 		sb.From(sb.BuilderAs(childTable, "c"))
 		t.Log(sb.String())
 		return nil
 	})
 	t.Log(err)
 
-	_, err = db.Find(testdata.TestTable.TableName(), func(sb *builder.SelectBuilder) error {
+	_, err = db.FindOne(testdata.TestTable.TableName(), func(sb *builder.SelectBuilder) error {
 		sb.Where(sb.In("id", childTable))
 		t.Log(sb.String())
 		return nil

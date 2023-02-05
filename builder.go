@@ -6,13 +6,16 @@ import (
 
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/builder"
+	"github.com/zlsgo/zdb/driver"
 )
 
-func (e *DB) Insert(table string, data interface{}) (lastId int64, err error) {
+var IDKey = "id"
+
+func (e *DB) InsertAny(table string, data interface{}) (lastId int64, err error) {
 	return e.insert(table, data, parseAll)
 }
 
-func (e *DB) InsertMaps(table string, data interface{}) (lastId int64, err error) {
+func (e *DB) Insert(table string, data interface{}) (lastId int64, err error) {
 	return e.insert(table, data, parseValues)
 }
 
@@ -38,21 +41,30 @@ func (e *DB) insert(table string, data interface{}, parseFn func(data interface{
 	if len(values) == 0 {
 		return 0, errInsertEmpty
 	}
+	isPostgreSQL := e.driver.Value() == driver.PostgreSQL
+	if !isPostgreSQL {
+		result, err := e.Exec(sql, values...)
+		if err != nil {
+			return 0, err
+		}
 
-	result, err := e.Exec(sql, values...)
+		if i, _ := result.RowsAffected(); i == 0 {
+			return 0, errInsertEmpty
+		}
+
+		return result.LastInsertId()
+	}
+
+	result, err := e.QueryToMaps(sql+" RETURNING "+IDKey, values...)
 	if err != nil {
 		return 0, err
 	}
 
-	if i, _ := result.RowsAffected(); i == 0 {
-		return 0, errInsertEmpty
-	}
-
-	return result.LastInsertId()
+	return result[0].Get(IDKey).Int64(), nil
 }
 
-func (e *DB) Find(table string, fn func(b *builder.SelectBuilder) error) (ztype.Map, error) {
-	resultMap, err := e.FindAll(table, func(sb *builder.SelectBuilder) error {
+func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (ztype.Map, error) {
+	resultMap, err := e.Find(table, func(sb *builder.SelectBuilder) error {
 		sb.Limit(1)
 		if fn == nil {
 			return nil
@@ -61,7 +73,7 @@ func (e *DB) Find(table string, fn func(b *builder.SelectBuilder) error) (ztype.
 	})
 
 	if err != nil {
-		return nil, err
+		return ztype.Map{}, err
 	}
 
 	return resultMap[0], err
@@ -73,9 +85,9 @@ type Pages struct {
 	Curpage uint `json:"curpage"`
 }
 
-func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBuilder) error) ([]ztype.Map, Pages, error) {
+func (e *DB) Pages(table string, page, pagesize int, fn ...func(b *builder.SelectBuilder) error) (ztype.Maps, Pages, error) {
 	var b *builder.SelectBuilder
-	resultMap, err := e.FindAll(table, func(bui *builder.SelectBuilder) error {
+	resultMap, err := e.Find(table, func(bui *builder.SelectBuilder) error {
 		bui.Limit(pagesize)
 		if page > 0 {
 			bui.Offset((page - 1) * pagesize)
@@ -83,10 +95,9 @@ func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBu
 
 		b = bui
 
-		if fn != nil {
-			return fn(bui)
+		if len(fn) > 0 && fn[0] != nil {
+			return fn[0](bui)
 		}
-
 		return nil
 	})
 
@@ -95,7 +106,7 @@ func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBu
 	}
 
 	if err != nil {
-		return nil, Pages{}, err
+		return resultMap, Pages{}, err
 	}
 
 	sql, values := b.Select(b.As("count(*)", "total")).Limit(-1).Offset(-1).Build()
@@ -111,12 +122,11 @@ func (e *DB) Pages(table string, page, pagesize int, fn func(b *builder.SelectBu
 	return resultMap, pages, err
 }
 
-func (e *DB) FindAll(table string, fn func(b *builder.SelectBuilder) error) ([]ztype.Map, error) {
+func (e *DB) Find(table string, fn func(b *builder.SelectBuilder) error) (ztype.Maps, error) {
 	b := builder.Query(table).SetDriver(e.driver)
-
 	if fn != nil {
 		if err := fn(b); err != nil {
-			return nil, err
+			return []ztype.Map{}, err
 		}
 	}
 
@@ -138,7 +148,6 @@ func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int6
 
 func (e *DB) update(table string, data interface{}, parseFn func(data interface{}) (cols []string, args [][]interface{}, err error), fn func(b *builder.UpdateBuilder) error) (int64, error) {
 	b := builder.Update(table).SetDriver(e.driver)
-
 	if fn == nil {
 		return 0, errors.New("update the condition cannot be empty")
 	}
@@ -146,6 +155,9 @@ func (e *DB) update(table string, data interface{}, parseFn func(data interface{
 	cols, args, err := parseFn(data)
 	if err != nil && err != errNoData {
 		return 0, err
+	}
+	if len(cols) == 0 {
+		return 0, errors.New("update the data cannot be empty")
 	}
 
 	if _, ok := data.(*QuoteData); ok {

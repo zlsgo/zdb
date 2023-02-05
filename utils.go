@@ -68,17 +68,17 @@ func (e *DB) QuoteCols(cols []string) []string {
 	return nm
 }
 
-func parseQuery(e *DB, b builder.Builder) ([]ztype.Map, error) {
+func parseQuery(e *DB, b builder.Builder) (ztype.Maps, error) {
 	sql, values := b.Build()
 
 	rows, err := e.Query(sql, values...)
 	if err != nil {
-		return nil, err
+		return make(ztype.Maps, 0), err
 	}
 
 	result, total, err := ScanToMap(rows)
 	if total == 0 {
-		return []ztype.Map{}, ErrRecordNotFound
+		return make(ztype.Maps, 0), ErrNotFound
 	}
 
 	return result, err
@@ -114,6 +114,16 @@ func parseValues(data interface{}) (cols []string, args [][]interface{}, err err
 		}
 		args = append(args, colArgs)
 	case map[string]interface{}:
+		l := len(val)
+		cols = make([]string, 0, l)
+		colArgs := make([]interface{}, 0, l)
+		for key := range val {
+			v := val[key]
+			cols = append(cols, key)
+			colArgs = append(colArgs, v)
+		}
+		args = append(args, colArgs)
+	case ztype.Map:
 		l := len(val)
 		cols = make([]string, 0, l)
 		colArgs := make([]interface{}, 0, l)
@@ -159,7 +169,8 @@ func parseValues(data interface{}) (cols []string, args [][]interface{}, err err
 func parseStruct(data interface{}) (cols []string, args [][]interface{}, err error) {
 	vof := reflect.ValueOf(data)
 	vof = reflect.Indirect(vof)
-	if vof.Kind() == reflect.Struct {
+	kind := vof.Kind()
+	if kind == reflect.Struct {
 		typ := vof.Type()
 		numField := vof.NumField()
 		cols = make([]string, 0, numField)
@@ -185,6 +196,10 @@ func parseStruct(data interface{}) (cols []string, args [][]interface{}, err err
 
 		args = append(args, colArgs)
 		return
+	} else if kind == reflect.Slice {
+		// for i := 0; i < vof.Len(); i++ {
+		// 	zlog.Debug(vof.Index(i).Interface())
+		// }
 	}
 
 	err = errors.New("insert data is illegal")

@@ -50,9 +50,7 @@ func GetDbConf(id string) (dbConf driver.IfeConfig, clera func(), err error) {
 			DBName:   "test" + id,
 		}
 	case "mssql":
-		dbConf = &mssql.Config{
-			Dsn: "",
-		}
+		dbConf = &mssql.Config{}
 	default:
 		return nil, nil, errors.New("未知数据库类型")
 	}

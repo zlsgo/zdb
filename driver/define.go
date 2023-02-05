@@ -10,6 +10,7 @@ import (
 type (
 	IfeConfig interface {
 		GetDsn() string
+		SetDsn(string)
 		GetDriver() string
 		DB() *sql.DB
 		MustDB() (*sql.DB, error)
@@ -21,8 +22,13 @@ type Typ int
 
 type Dialect interface {
 	Value() Typ
-	DataTypeOf(field *schema.Field) string
-	HasTable(table string) (sql string, values []interface{}, process func([]ztype.Map) bool)
+	DataTypeOf(field *schema.Field, only ...bool) string
+	HasTable(table string) (sql string, values []interface{}, process func(ztype.Maps) bool)
+	GetColumn(table string) (sql string, values []interface{}, process func(result ztype.Maps) ztype.Map)
+	RenameColumn(table, oldName, newName string) (sql string, values []interface{})
+	HasIndex(table, name string) (sql string, values []interface{}, process func(ztype.Maps) bool)
+	RenameIndex(table, oldName, newName string) (sql string, values []interface{})
+	CreateIndex(table, name string, columns []string, indexType string) (sql string, values []interface{})
 }
 
 const (

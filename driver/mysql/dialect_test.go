@@ -11,23 +11,26 @@ import (
 func TestDataTypeOf(t *testing.T) {
 	tt := zlsgo.NewTest(t)
 	c := &Config{}
+	n := func(f *schema.Field) {
+		f.NotNull = false
+	}
 	tests := map[*schema.Field]string{
-		schema.NewField("id", int64(0)):   "tinyint",
-		schema.NewField("id", uint8(0)):   "tinyint UNSIGNED",
-		schema.NewField("id", float32(0)): "float",
-		schema.NewField("id", time.Now()): "datetime",
-		schema.NewField("id", true):       "boolean",
-		schema.NewField("id", ""):         "varchar(250)",
-		schema.NewField("id", []byte("")): "longblob",
-		schema.NewField("id", int64(0), func(field *schema.Field) {
-			field.Size = 999999
-		}): "bigint",
-		schema.NewField("id", "", func(field *schema.Field) {
+		schema.NewFieldForValue("id", int64(0), n):   "bigint",
+		schema.NewFieldForValue("id", uint8(0), n):   "tinyint UNSIGNED",
+		schema.NewFieldForValue("id", float32(0), n): "float",
+		schema.NewFieldForValue("id", time.Now(), n): "datetime NULL",
+		schema.NewFieldForValue("id", true, n):       "boolean",
+		schema.NewFieldForValue("id", "", n):         "varchar(250)",
+		schema.NewFieldForValue("id", []byte(""), n): "longblob",
+		schema.NewFieldForValue("id", int64(0), func(field *schema.Field) {
+			field.Size = 2147483649
+		}, n): "bigint",
+		schema.NewFieldForValue("id", "", func(field *schema.Field) {
 			field.Size = 1000
-		}): "varchar(1000)",
-		schema.NewField("id", "", func(field *schema.Field) {
+		}, n): "varchar(1000)",
+		schema.NewFieldForValue("id", "", func(field *schema.Field) {
 			field.Size = 999999
-		}): "mediumtext",
+		}, n): "mediumtext",
 	}
 
 	for tv, expected := range tests {
