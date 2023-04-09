@@ -217,3 +217,7 @@ func (b *CreateTableBuilder) String() string {
 	s, _ := b.Build()
 	return s
 }
+
+func (b *CreateTableBuilder) Safety() error {
+	return nil
+}

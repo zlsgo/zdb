@@ -9,8 +9,6 @@ import (
 	"github.com/zlsgo/zdb/driver"
 )
 
-var IDKey = "id"
-
 func (e *DB) InsertAny(table string, data interface{}) (lastId int64, err error) {
 	return e.insert(table, data, parseAll)
 }
@@ -55,12 +53,12 @@ func (e *DB) insert(table string, data interface{}, parseFn func(data interface{
 		return result.LastInsertId()
 	}
 
-	result, err := e.QueryToMaps(sql+" RETURNING "+IDKey, values...)
+	result, err := e.QueryToMaps(sql+" RETURNING "+builder.IDKey, values...)
 	if err != nil {
 		return 0, err
 	}
 
-	return result[0].Get(IDKey).Int64(), nil
+	return result[0].Get(builder.IDKey).Int64(), nil
 }
 
 func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (ztype.Map, error) {

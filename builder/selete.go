@@ -308,3 +308,7 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 
 	return b.args.Compile(buf.String())
 }
+
+func (b *SelectBuilder) Safety() error {
+	return nil
+}

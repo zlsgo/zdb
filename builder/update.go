@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -133,16 +134,9 @@ func (b *UpdateBuilder) Build() (sql string, args []interface{}) {
 	return b.build(false)
 }
 
-func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
+func (b *UpdateBuilder) buildStatement() []byte {
 	buf := zutil.GetBuff(256)
 	defer zutil.PutBuff(buf)
-
-	buf.WriteString("UPDATE ")
-	buf.WriteString(b.table)
-
-	buf.WriteString(" SET ")
-	buf.WriteString(strings.Join(b.assignments, ", "))
-
 	if len(b.whereExprs) > 0 {
 		buf.WriteString(" WHERE ")
 		buf.WriteString(strings.Join(b.whereExprs, " AND "))
@@ -158,9 +152,42 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 		}
 	}
 
+	return buf.Bytes()
+}
+
+func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
+	buf := zutil.GetBuff(256)
+	defer zutil.PutBuff(buf)
+
+	buf.WriteString("UPDATE ")
+	buf.WriteString(b.table)
+
+	buf.WriteString(" SET ")
+	buf.WriteString(strings.Join(b.assignments, ", "))
+
 	if b.limit >= 0 {
-		buf.WriteString(" LIMIT ")
-		buf.WriteString(strconv.Itoa(b.limit))
+		if b.args.driver.Value() == driver.SQLite {
+			buf.WriteString(" WHERE ")
+			buf.WriteString(IDKey)
+			buf.WriteString(" IN (")
+
+			buf.WriteString("SELECT ")
+			buf.WriteString(IDKey)
+			buf.WriteString(" FROM ")
+			buf.WriteString(b.table)
+			buf.Write(b.buildStatement())
+			buf.WriteString(" LIMIT ")
+			buf.WriteString(strconv.Itoa(b.limit))
+
+			buf.WriteString(")")
+		} else {
+			buf.Write(b.buildStatement())
+
+			buf.WriteString(" LIMIT ")
+			buf.WriteString(strconv.Itoa(b.limit))
+		}
+	} else {
+		buf.Write(b.buildStatement())
 	}
 
 	if blend {
@@ -168,4 +195,11 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 	}
 
 	return b.args.Compile(buf.String())
+}
+
+func (b *UpdateBuilder) Safety() error {
+	if len(b.whereExprs) == 0 {
+		return errors.New("update safety error: no where condition")
+	}
+	return nil
 }

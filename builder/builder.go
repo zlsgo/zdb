@@ -7,6 +7,7 @@ import (
 // Builder is a general SQL builder
 type Builder interface {
 	Build() (sql string, values []interface{})
+	Safety() error
 }
 
 type compiledBuilder struct {
@@ -50,4 +51,8 @@ func BuildNamed(format string, named map[string]interface{}) Builder {
 		args:   args,
 		format: format,
 	}
+}
+
+func (b *compiledBuilder) Safety() error {
+	return nil
 }

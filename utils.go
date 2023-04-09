@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/sohaha/zlsgo/zreflect"
 	"github.com/sohaha/zlsgo/zstring"
@@ -85,6 +86,11 @@ func parseQuery(e *DB, b builder.Builder) (ztype.Maps, error) {
 }
 
 func parseExec(e *DB, b builder.Builder) (int64, error) {
+	err := b.Safety()
+	if err != nil {
+		return 0, err
+	}
+
 	sql, values := b.Build()
 
 	result, err := e.Exec(sql, values...)
@@ -93,6 +99,47 @@ func parseExec(e *DB, b builder.Builder) (int64, error) {
 	}
 
 	return result.RowsAffected()
+}
+
+func parseMaps(val []map[string]interface{}) (cols []string, args [][]interface{}, err error) {
+	colsLen := 0
+	for i := 0; i < len(val); i++ {
+		v := val[i]
+		if i == 0 {
+			colArgs := make([]interface{}, 0, len(v))
+			for key := range v {
+				v := v[key]
+				cols = append(cols, key)
+				colArgs = append(colArgs, v)
+			}
+			args = append(args, colArgs)
+			colsLen = len(cols)
+		} else {
+			colArgs := make([]interface{}, 0, colsLen)
+			for ii := 0; ii < colsLen; ii++ {
+				key := cols[ii]
+				val, ok := v[key]
+				if !ok {
+					return nil, nil, errors.New("invalid values[" + strconv.FormatInt(int64(i), 10) + "] for column: " + key)
+				}
+				colArgs = append(colArgs, val)
+			}
+			args = append(args, colArgs)
+		}
+	}
+	return cols, args, nil
+}
+
+func parseMap(val map[string]interface{}) ([]string, [][]interface{}, error) {
+	l := len(val)
+	cols := make([]string, 0, l)
+	colArgs := make([]interface{}, 0, l)
+	for key := range val {
+		v := val[key]
+		cols = append(cols, key)
+		colArgs = append(colArgs, v)
+	}
+	return cols, [][]interface{}{colArgs}, nil
 }
 
 func parseValues(data interface{}) (cols []string, args [][]interface{}, err error) {
@@ -114,51 +161,13 @@ func parseValues(data interface{}) (cols []string, args [][]interface{}, err err
 		}
 		args = append(args, colArgs)
 	case map[string]interface{}:
-		l := len(val)
-		cols = make([]string, 0, l)
-		colArgs := make([]interface{}, 0, l)
-		for key := range val {
-			v := val[key]
-			cols = append(cols, key)
-			colArgs = append(colArgs, v)
-		}
-		args = append(args, colArgs)
+		return parseMap(val)
 	case ztype.Map:
-		l := len(val)
-		cols = make([]string, 0, l)
-		colArgs := make([]interface{}, 0, l)
-		for key := range val {
-			v := val[key]
-			cols = append(cols, key)
-			colArgs = append(colArgs, v)
-		}
-		args = append(args, colArgs)
+		return parseMap(*(*map[string]interface{})(unsafe.Pointer(&val)))
 	case []map[string]interface{}:
-		colsLen := 0
-		for i := 0; i < len(val); i++ {
-			v := val[i]
-			if i == 0 {
-				colArgs := make([]interface{}, 0, len(v))
-				for key := range v {
-					v := v[key]
-					cols = append(cols, key)
-					colArgs = append(colArgs, v)
-				}
-				args = append(args, colArgs)
-				colsLen = len(cols)
-			} else {
-				colArgs := make([]interface{}, 0, colsLen)
-				for ii := 0; ii < colsLen; ii++ {
-					key := cols[ii]
-					val, ok := v[key]
-					if !ok {
-						return nil, nil, errors.New("invalid values[" + strconv.FormatInt(int64(i), 10) + "] for column: " + key)
-					}
-					colArgs = append(colArgs, val)
-				}
-				args = append(args, colArgs)
-			}
-		}
+		return parseMaps(val)
+	case ztype.Maps:
+		return parseMaps(*(*[]map[string]interface{})(unsafe.Pointer(&val)))
 	default:
 		err = errDataInvalid
 	}
@@ -197,9 +206,18 @@ func parseStruct(data interface{}) (cols []string, args [][]interface{}, err err
 		args = append(args, colArgs)
 		return
 	} else if kind == reflect.Slice {
-		// for i := 0; i < vof.Len(); i++ {
-		// 	zlog.Debug(vof.Index(i).Interface())
-		// }
+		for i := 0; i < vof.Len(); i++ {
+			val := vof.Index(i).Interface()
+			col, arg, err := parseStruct(val)
+			if err != nil {
+				return nil, nil, err
+			}
+			if i == 0 {
+				cols = col
+			}
+			args = append(args, arg[0])
+		}
+		return
 	}
 
 	err = errors.New("insert data is illegal")

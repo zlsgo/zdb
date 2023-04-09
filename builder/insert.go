@@ -30,6 +30,8 @@ func Insert(table string) *InsertBuilder {
 	}
 }
 
+
+
 // Replace Insert sets table name in INSERT, REPLACE is a MySQL to the SQL standard
 func Replace(table string) *InsertBuilder {
 	cond := NewCond()
@@ -116,4 +118,16 @@ func (b *InsertBuilder) SetDriver(driver driver.Dialect) *InsertBuilder {
 // Var returns a placeholder for value
 func (b *InsertBuilder) Var(arg interface{}) string {
 	return b.args.Map(arg)
+}
+
+func (b *InsertBuilder) Safety() error {
+	return nil
+}
+
+// BatchValues adds a list of values for a batch in INSERT
+func (b *InsertBuilder) BatchValues(values [][]interface{}) *InsertBuilder {
+	for _, v := range values {
+		b.Values(v...)
+	}
+	return b
 }

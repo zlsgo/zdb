@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -72,6 +73,15 @@ func (b *DeleteBuilder) Limit(limit int) *DeleteBuilder {
 func (b *DeleteBuilder) String() string {
 	s, _ := b.build(true)
 	return s
+}
+
+// Safety check
+func (b *DeleteBuilder) Safety() error {
+	if len(b.whereExprs) == 0 {
+		return errors.New("update safety error: no where condition")
+	}
+
+	return nil
 }
 
 // Build returns compiled DELETE string and args

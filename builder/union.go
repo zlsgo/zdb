@@ -157,3 +157,7 @@ func (b *UnionBuilder) build(blend bool) (sql string, args []interface{}) {
 func (b *UnionBuilder) Var(arg interface{}) string {
 	return b.args.Map(arg)
 }
+
+func (b *UnionBuilder) Safety() error {
+	return nil
+}

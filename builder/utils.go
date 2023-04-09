@@ -10,6 +10,8 @@ import (
 	"github.com/zlsgo/zdb/driver"
 )
 
+var IDKey = "id"
+
 // Escape replaces `$` with `$$` in ident
 func Escape(ident string) string {
 	return strings.Replace(ident, "$", "$$", -1)
