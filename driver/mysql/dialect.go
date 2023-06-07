@@ -38,6 +38,8 @@ func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 		t.WriteString(c.getSchemaFloatType(f))
 	case schema.String:
 		t.WriteString(c.getSchemaStringType(f))
+	case schema.Text:
+		t.WriteString("longtext")
 	case schema.Time:
 		t.WriteString(c.getSchemaTimeType(f))
 	case schema.Bytes:

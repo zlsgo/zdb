@@ -25,7 +25,7 @@ func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 	switch f.DataType {
 	case schema.Bool:
 		t.WriteString("numeric")
-	case schema.String:
+	case schema.String, schema.Text:
 		t.WriteString("text")
 	case schema.Int, schema.Uint:
 		t.WriteString("integer")

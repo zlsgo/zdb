@@ -8,6 +8,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/zlsgo/zdb/driver"
 
+	"github.com/sohaha/zlsgo/zstring"
 	"github.com/sohaha/zlsgo/ztime"
 	"github.com/sohaha/zlsgo/zutil"
 )
@@ -19,15 +20,16 @@ var (
 
 // Config databaseName configuration
 type Config struct {
-	driver.Typ
 	db         *sql.DB
+	Password   string
 	dsn        string
 	Host       string
-	Port       int
 	User       string
-	Password   string
 	DBName     string
+	Charset    string
 	Parameters string
+	Port       int
+	driver.Typ
 }
 
 func (c *Config) DB() *sql.DB {
@@ -62,8 +64,18 @@ func (c *Config) GetDsn() string {
 		loc = url.QueryEscape(timezone)
 		timezone = url.QueryEscape("'" + timezone + "'")
 	}
-	c.dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
-		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 3306, c.Port), c.DBName, zutil.IfVal(c.Parameters == "", "parseTime=true&charset=utf8&loc="+loc+"&time_zone="+timezone, c.Parameters))
+
+	charset := "utf8mb4"
+	if c.Charset != "" {
+		charset = zstring.TrimSpace(c.Charset)
+	}
+	if charset != "" {
+		charset = "charset=" + charset + "&"
+	}
+
+	c.dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s%s",
+		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 3306, c.Port), c.DBName, charset, zutil.IfVal(c.Parameters == "", "parseTime=true&loc="+loc+"&time_zone="+timezone, c.Parameters))
+
 	return c.dsn
 }
 

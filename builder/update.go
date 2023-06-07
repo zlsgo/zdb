@@ -12,13 +12,13 @@ import (
 // UpdateBuilder is a builder to build UPDATE
 type UpdateBuilder struct {
 	Cond
+	args        *buildArgs
+	order       string
 	table       string
 	assignments []string
 	whereExprs  []string
 	orderByCols []string
-	order       string
 	limit       int
-	args        *buildArgs
 }
 
 var _ Builder = new(UpdateBuilder)

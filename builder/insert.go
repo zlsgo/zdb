@@ -10,12 +10,11 @@ import (
 
 // InsertBuilder is a builder to build INSERT
 type InsertBuilder struct {
+	args   *buildArgs
 	verb   string
 	table  string
 	cols   []string
 	values [][]string
-
-	args *buildArgs
 }
 
 var _ Builder = new(InsertBuilder)
@@ -29,8 +28,6 @@ func Insert(table string) *InsertBuilder {
 		table: table,
 	}
 }
-
-
 
 // Replace Insert sets table name in INSERT, REPLACE is a MySQL to the SQL standard
 func Replace(table string) *InsertBuilder {

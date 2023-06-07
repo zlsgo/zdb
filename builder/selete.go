@@ -14,22 +14,22 @@ type (
 	// SelectBuilder is a builder to build SELECT
 	SelectBuilder struct {
 		Cond
-		done        bool
-		distinct    bool
-		tables      []string
-		selectCols  []string
+		args        *buildArgs
+		forWhat     string
+		order       string
+		whereExprs  []string
 		joinOptions []JoinOption
 		joinTables  []string
 		joinExprs   [][]string
-		whereExprs  []string
+		selectCols  []string
 		havingExprs []string
 		groupByCols []string
 		orderByCols []string
-		order       string
+		tables      []string
 		limit       int
 		offset      int
-		forWhat     string
-		args        *buildArgs
+		done        bool
+		distinct    bool
 	}
 )
 

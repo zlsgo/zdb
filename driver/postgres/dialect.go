@@ -67,6 +67,8 @@ func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 
 			t.WriteString("decimal")
 		}
+	case schema.Text:
+		t.WriteString("text")
 	case schema.String:
 		if f.Size > 0 {
 			t.WriteString(fmt.Sprintf("varchar(%d)", f.Size))

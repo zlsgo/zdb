@@ -51,7 +51,7 @@ func TestSelectNested(t *testing.T) {
 	childSb := builder.Select("*").From("user")
 	childSb.Where(childSb.GE("id", 1))
 
-	tt.Run("from", func(t *testing.T, tt *zlsgo.TestUtil) {
+	tt.Run("from", func(tt *zlsgo.TestUtil) {
 		sb := builder.Select("*")
 		sb.From(sb.BuilderAs(childSb, "u"))
 		sb.Where(sb.EQ("age", 18))
@@ -63,7 +63,7 @@ func TestSelectNested(t *testing.T) {
 		tt.Equal([]interface{}{1, 18}, values)
 	})
 
-	tt.Run("where", func(t *testing.T, tt *zlsgo.TestUtil) {
+	tt.Run("where", func(tt *zlsgo.TestUtil) {
 		sb := builder.Select("*")
 		sb.Where(sb.In("id", childSb))
 		sb.From("user").Where(sb.EQ("age", 108))

@@ -12,18 +12,18 @@ import (
 )
 
 type TableBuilder struct {
-	table string
 	args  *buildArgs
+	table string
 }
 type (
 	// CreateTableBuilder is a builder to build CREATE TABLE
 	CreateTableBuilder struct {
 		*TableBuilder
-		ifNotExists bool
 		verb        string
 		defines     [][]string
 		options     [][]string
 		columns     []*schema.Field
+		ifNotExists bool
 	}
 )
 

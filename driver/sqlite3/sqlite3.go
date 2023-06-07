@@ -13,11 +13,11 @@ var _ driver.Dialect = &Config{}
 
 // Config database configuration
 type Config struct {
+	db         *sql.DB
+	File       string
+	dsn        string
+	Parameters string
 	driver.Typ
-	File        string
-	dsn         string
-	Parameters  string
-	db          *sql.DB
 	Memory      bool
 	ForeignKeys bool
 }

@@ -78,6 +78,8 @@ func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 		} else {
 			t.WriteString("float")
 		}
+	case schema.Text:
+		t.WriteString("nvarchar(MAX)")
 	case schema.String:
 		size := f.Size
 		if size == 0 {

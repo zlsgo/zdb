@@ -11,8 +11,8 @@ import (
 
 type user struct {
 	Name string `json:"name"`
-	Age  int    `json:"age"`
 	ID   string `json:"id"`
+	Age  int    `json:"age"`
 }
 
 func TestBuilder(t *testing.T) {

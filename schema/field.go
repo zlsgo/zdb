@@ -13,13 +13,13 @@ type (
 		Name          string
 		DataType      DataType
 		RawDataType   string
-		PrimaryKey    bool
-		AutoIncrement bool
-		NotNull       bool
 		Comment       string
+		Scale         int
 		Size          uint64
 		Precision     int
-		Scale         int
+		AutoIncrement bool
+		NotNull       bool
+		PrimaryKey    bool
 	}
 )
 
@@ -37,6 +37,7 @@ const (
 	Uint64 DataType = "uint64"
 	Float  DataType = "float"
 	String DataType = "string"
+	Text   DataType = "text"
 	JSON   DataType = "json"
 	Time   DataType = "time"
 	Bytes  DataType = "bytes"

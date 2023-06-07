@@ -74,8 +74,8 @@ func argsCompileHandler(args *buildArgs) zutil.ArgsOpt {
 }
 
 type buildArgs struct {
-	zutil.Args
 	driver driver.Dialect
+	zutil.Args
 }
 
 func NewArgs(onlyNamed bool) *buildArgs {

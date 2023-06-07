@@ -30,8 +30,8 @@ func TestBase(t *testing.T) {
 	tt.NoError(err)
 
 	baseExec(db, tt)
-	baseQuery(db, t, tt)
-	baseTransaction(db, t, tt)
+	baseQuery(db, tt)
+	baseTransaction(db, tt)
 }
 
 func baseExec(db *zdb.DB, tt *zlsgo.TestUtil) {
@@ -47,12 +47,12 @@ func baseExec(db *zdb.DB, tt *zlsgo.TestUtil) {
 	_, _ = db.Exec(`INSERT INTO ` + testdata.TestTable.TableName() + ` (name) VALUES ('test')`)
 }
 
-func baseQuery(db *zdb.DB, t *testing.T, tt *zlsgo.TestUtil) {
+func baseQuery(db *zdb.DB, tt *zlsgo.TestUtil) {
 	rows, err := db.Query(fmt.Sprintf("select * from %s", testdata.TestTable.TableName()))
 	tt.EqualExit(nil, err)
 	rowsMap, count, err := zdb.ScanToMap(rows)
 	tt.EqualExit(nil, err)
-	t.Log(count, rowsMap)
+	tt.Log(count, rowsMap)
 	tt.EqualExit(2, len(rowsMap))
 	tt.EqualExit("init", rowsMap[0]["name"])
 
@@ -60,14 +60,14 @@ func baseQuery(db *zdb.DB, t *testing.T, tt *zlsgo.TestUtil) {
 	rows, _ = db.Query(fmt.Sprintf("select * from %s", testdata.TestTable.TableName()))
 	count, err = zdb.Scan(rows, &users)
 	tt.EqualExit(nil, err)
-	t.Log(count, users)
+	tt.Log(count, users)
 	tt.EqualExit(2, len(users))
 	tt.EqualExit(1, users[0].ID)
 	tt.EqualExit("init", users[0].Name)
 	tt.EqualExit(ztime.Now(), users[0].Date.String())
-	t.Log(users[0].Date.Time())
+	tt.Log(users[0].Date.Time())
 	json, _ := zjson.Marshal(users)
-	t.Log(string(json))
+	tt.Log(string(json))
 
 	var user testdata.TestTableUser
 	rows, _ = db.Query(fmt.Sprintf("select * from %s where id = ? limit 1", testdata.TestTable.TableName()), 1)
@@ -78,10 +78,10 @@ func baseQuery(db *zdb.DB, t *testing.T, tt *zlsgo.TestUtil) {
 	tt.EqualExit(ztime.Now(), user.Date.String())
 
 	json, _ = zjson.Marshal(user)
-	t.Log(count, string(json))
+	tt.Log(count, string(json))
 }
 
-func baseTransaction(db *zdb.DB, t *testing.T, tt *zlsgo.TestUtil) {
+func baseTransaction(db *zdb.DB, tt *zlsgo.TestUtil) {
 	var err error
 	for _, v := range [][]string{
 		{"false", `INSERT INTO ` + testdata.TestTable.TableName() + ` (name) VALUES ('Rollback -')`},
@@ -99,7 +99,7 @@ func baseTransaction(db *zdb.DB, t *testing.T, tt *zlsgo.TestUtil) {
 			}
 			return nil
 		})
-		t.Log("是否回滚", ifRollback, err)
+		tt.Log("是否回滚", ifRollback, err)
 		if !ifRollback {
 			tt.EqualNil(err)
 		} else {

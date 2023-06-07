@@ -12,12 +12,12 @@ import (
 // DeleteBuilder is a builder to build DELETE
 type DeleteBuilder struct {
 	Cond
+	args        *buildArgs
 	table       string
+	order       string
 	whereExprs  []string
 	orderByCols []string
-	order       string
 	limit       int
-	args        *buildArgs
 }
 
 var _ Builder = new(DeleteBuilder)
