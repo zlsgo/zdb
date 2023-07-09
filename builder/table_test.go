@@ -45,7 +45,7 @@ func TestCreateTableQuick(t *testing.T) {
 	tt := zlsgo.NewTest(t)
 
 	for dialect, expected := range map[driver.Dialect]string{
-		&mysql.Config{}:   "CREATE TABLE user (id bigint UNSIGNED PRIMARY KEY COMMENT 'ID', name varchar(100) COMMENT '用户名', created_at datetime NOT NULL COMMENT '创建时间') DEFAULT CHARACTER SET utf8mb4",
+		&mysql.Config{}:   "CREATE TABLE user (id tinyint UNSIGNED PRIMARY KEY COMMENT 'ID', name varchar(100) COMMENT '用户名', created_at datetime NOT NULL COMMENT '创建时间') DEFAULT CHARACTER SET utf8mb4",
 		&sqlite3.Config{}: "CREATE TABLE user (id integer PRIMARY KEY, name text, created_at datetime NOT NULL)",
 	} {
 		b := builder.CreateTable("user")

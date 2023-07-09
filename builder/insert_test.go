@@ -18,7 +18,7 @@ func TestInsert(t *testing.T) {
 	sql, values := sb.Build()
 	tt.Log(sql, values)
 
-	tt.Equal(`INSERT INTO user (username, age) VALUES (?, ?)`, sql)
+	tt.Equal(`INSERT INTO user (username, age) VALUES ($1, $2)`, sql)
 	tt.Equal([]interface{}{"new user", 18}, values)
 
 	sb = builder.Insert("user")

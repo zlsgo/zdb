@@ -9,7 +9,6 @@ import (
 	"github.com/zlsgo/zdb/driver"
 
 	"github.com/sohaha/zlsgo/zstring"
-	"github.com/sohaha/zlsgo/ztime"
 	"github.com/sohaha/zlsgo/zutil"
 )
 
@@ -24,12 +23,13 @@ type Config struct {
 	Password   string
 	dsn        string
 	Host       string
+	Parameters string
 	User       string
 	DBName     string
 	Charset    string
-	Parameters string
-	Port       int
+	Zone       string
 	driver.Typ
+	Port int
 }
 
 func (c *Config) DB() *sql.DB {
@@ -58,11 +58,15 @@ func (c *Config) GetDsn() string {
 		return c.dsn
 	}
 
-	loc := "Local"
-	timezone := ztime.GetTimeZone().String()
-	if timezone != "" {
-		loc = url.QueryEscape(timezone)
-		timezone = url.QueryEscape("'" + timezone + "'")
+	// loc := "Local"
+	// timezone := ztime.GetTimeZone().String()
+	// if timezone != "" {
+	// 	loc = url.QueryEscape(timezone)
+	// 	timezone = url.QueryEscape("'" + timezone + "'")
+	// }
+	loc := ""
+	if c.Zone != "" {
+		loc = "loc=" + url.QueryEscape(c.Zone) + "&"
 	}
 
 	charset := "utf8mb4"
@@ -73,8 +77,8 @@ func (c *Config) GetDsn() string {
 		charset = "charset=" + charset + "&"
 	}
 
-	c.dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s%s",
-		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 3306, c.Port), c.DBName, charset, zutil.IfVal(c.Parameters == "", "parseTime=true&loc="+loc+"&time_zone="+timezone, c.Parameters))
+	c.dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s%s%s",
+		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 3306, c.Port), c.DBName, charset, loc, zutil.IfVal(c.Parameters == "", "parseTime=true", c.Parameters))
 
 	return c.dsn
 }

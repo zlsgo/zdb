@@ -154,9 +154,6 @@ func (e *DB) update(table string, data interface{}, parseFn func(data interface{
 	if err != nil && err != errNoData {
 		return 0, err
 	}
-	if len(cols) == 0 {
-		return 0, errors.New("update the data cannot be empty")
-	}
 
 	if _, ok := data.(*QuoteData); ok {
 		cols = e.QuoteCols(cols)

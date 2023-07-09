@@ -110,7 +110,8 @@ func TestBuilder(t *testing.T) {
 
 	_, err = db.Update(table, nil, func(b *builder.UpdateBuilder) error {
 		b.Set(b.Decr("age"), b.Assign("name", "666"))
-		tt.Equal("UPDATE user SET age = age - 1, name = 666", b.String())
+		b.Where(b.EQ("id", 1))
+		tt.Equal("UPDATE user SET age = age - 1, name = 666 WHERE id = 1", b.String())
 		return nil
 	})
 	tt.NoError(err)

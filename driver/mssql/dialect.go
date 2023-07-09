@@ -117,6 +117,7 @@ func (c *Config) HasTable(table string) (sql string, values []interface{}, proce
 
 func (c *Config) GetColumn(table string) (sql string, values []interface{}, process func(result ztype.Maps) ztype.Map) {
 	return "", []interface{}{}, func(data ztype.Maps) ztype.Map {
+		// TODO 待实现
 		return ztype.Map{}
 	}
 }

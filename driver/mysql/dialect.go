@@ -173,10 +173,13 @@ func (c *Config) HasTable(table string) (sql string, values []interface{}, proce
 }
 
 func (c *Config) GetColumn(table string) (sql string, values []interface{}, process func(result ztype.Maps) ztype.Map) {
-	return "SELECT column_name, column_default, is_nullable = 'YES', data_type, character_maximum_length, column_type, column_key, extra, column_comment, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema = ? AND table_name =? ORDER BY ORDINAL_POSITION", []interface{}{c.databaseName(), table}, func(data ztype.Maps) ztype.Map {
+	return "SELECT column_name as column_name, column_default, is_nullable = 'YES', data_type, character_maximum_length, column_type as column_type, column_key, extra, column_comment, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema = ? AND table_name =? ORDER BY ORDINAL_POSITION", []interface{}{c.databaseName(), table}, func(data ztype.Maps) ztype.Map {
 		columns := make(ztype.Map, len(data))
 		data.ForEach(func(i int, val ztype.Map) bool {
 			name := ztype.ToString(val["column_name"])
+			if name == "" {
+				return true
+			}
 			columns[name] = ztype.Map{"type": ztype.ToString(val["column_type"])}
 			return true
 		})

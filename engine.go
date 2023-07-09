@@ -3,7 +3,13 @@ package zdb
 import (
 	"context"
 	"database/sql"
+
+	"github.com/zlsgo/zdb/driver"
 )
+
+func (e *DB) GetDriver() driver.Dialect {
+	return e.pools[0].driver
+}
 
 func (e *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
 	db, err := e.getSession(nil, true)

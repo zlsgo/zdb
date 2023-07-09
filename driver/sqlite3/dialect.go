@@ -69,6 +69,9 @@ func (c *Config) GetColumn(table string) (sql string, values []interface{}, proc
 		columns := make(ztype.Map, len(data))
 		data.ForEach(func(i int, val ztype.Map) bool {
 			name := ztype.ToString(val["name"])
+			if name == "" {
+				return true
+			}
 			columns[name] = ztype.Map{"type": ztype.ToString(val["type"])}
 			return true
 		})
