@@ -9,36 +9,71 @@ import (
 	"github.com/zlsgo/zdb/driver"
 )
 
-func (e *DB) InsertAny(table string, data interface{}) (lastId int64, err error) {
-	return e.insert(table, data, parseAll)
-}
-
 func (e *DB) Insert(table string, data interface{}) (lastId int64, err error) {
-	return e.insert(table, data, parseValues)
-}
-
-func (e *DB) insert(table string, data interface{}, parseFn func(data interface{}) (cols []string, args [][]interface{}, err error)) (lastId int64, err error) {
-	b := builder.Insert(table).SetDriver(e.driver)
-
-	cols, args, err := parseFn(data)
+	cols, args, err := parseMap(ztype.ToMap(data), nil)
 	if err != nil {
 		return 0, err
 	}
+	return e.insertData(builder.Insert(table), cols, args)
+}
 
-	if _, ok := data.(*QuoteData); ok {
-		cols = e.QuoteCols(cols)
+func (e *DB) BatchInsert(table string, data interface{}) (lastId []int64, err error) {
+	cols, args, err := parseMaps2(ztype.ToMaps(data))
+	if err != nil {
+		return []int64{0}, err
 	}
+
+	datas := splitMaps(args)
+	var id int64
+	// TODO 优化：开启事务
+	for i := range datas {
+		id, err = e.insertData(builder.Insert(table), cols, datas[i])
+		if err != nil {
+			return []int64{0}, err
+		}
+	}
+
+	return e.batchIds(args, id, err)
+}
+
+var MaxBatch = 1000
+
+func splitMaps(maps [][]interface{}) [][][]interface{} {
+	var result [][][]interface{}
+	for i := 0; i < len(maps); i += 10 {
+		end := i + 10
+		if end > len(maps) {
+			end = len(maps)
+		}
+		result = append(result, maps[i:end])
+	}
+	return result
+}
+func (e *DB) batchIds(args [][]interface{}, id int64, err error) ([]int64, error) {
+	ids := make([]int64, len(args))
+	for i := 0; i < len(args); i++ {
+		ids[i] = id - int64(i)
+	}
+	return ids, err
+}
+
+func (e *DB) insertData(b *builder.InsertBuilder, cols []string, args [][]interface{}) (lastId int64, err error) {
+	b.SetDriver(e.driver)
 
 	b.Cols(cols...)
 	for i := range args {
 		b.Values(args[i]...)
 	}
 
-	sql, values := b.Build()
+	sql, values, err := b.Build()
+	if err != nil {
+		return 0, err
+	}
 
 	if len(values) == 0 {
 		return 0, errInsertEmpty
 	}
+
 	isPostgreSQL := e.driver.Value() == driver.PostgreSQL
 	if !isPostgreSQL {
 		result, err := e.Exec(sql, values...)
@@ -59,6 +94,23 @@ func (e *DB) insert(table string, data interface{}, parseFn func(data interface{
 	}
 
 	return result[0].Get(builder.IDKey).Int64(), nil
+}
+
+func (e *DB) Replace(table string, data interface{}) (lastId int64, err error) {
+	cols, args, err := parseMap(ztype.ToMap(data), nil)
+	if err != nil {
+		return 0, err
+	}
+	return e.insertData(builder.Replace(table), cols, args)
+}
+
+func (e *DB) BatchReplace(table string, data interface{}) (lastId []int64, err error) {
+	cols, args, err := parseMaps2(ztype.ToMaps(data))
+	if err != nil {
+		return []int64{0}, err
+	}
+	id, err := e.insertData(builder.Replace(table), cols, args)
+	return e.batchIds(args, id, err)
 }
 
 func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (ztype.Map, error) {
@@ -107,7 +159,11 @@ func (e *DB) Pages(table string, page, pagesize int, fn ...func(b *builder.Selec
 		return resultMap, Pages{}, err
 	}
 
-	sql, values := b.Select(b.As("count(*)", "total")).Limit(-1).Offset(-1).Build()
+	sql, values, err := b.Select(b.As("count(*)", "total")).Limit(-1).Offset(-1).Build()
+	if err != nil {
+		return resultMap, Pages{}, err
+	}
+
 	rows, err := e.Query(sql, values...)
 
 	if err == nil {
@@ -133,10 +189,6 @@ func (e *DB) Find(table string, fn func(b *builder.SelectBuilder) error) (ztype.
 
 func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int64, error) {
 	b := builder.Delete(table).SetDriver(e.driver)
-	if fn == nil {
-		return 0, errors.New("delete the condition cannot be empty")
-	}
-
 	if err := fn(b); err != nil {
 		return 0, err
 	}
@@ -144,20 +196,15 @@ func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int6
 	return parseExec(e, b)
 }
 
-func (e *DB) update(table string, data interface{}, parseFn func(data interface{}) (cols []string, args [][]interface{}, err error), fn func(b *builder.UpdateBuilder) error) (int64, error) {
+func (e *DB) update(table string, cols []string, args [][]interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
 	b := builder.Update(table).SetDriver(e.driver)
 	if fn == nil {
 		return 0, errors.New("update the condition cannot be empty")
 	}
 
-	cols, args, err := parseFn(data)
-	if err != nil && err != errNoData {
-		return 0, err
-	}
-
-	if _, ok := data.(*QuoteData); ok {
-		cols = e.QuoteCols(cols)
-	}
+	// if len(cols) == 0 {
+	// 	return 0, errors.New("update the data cannot be empty")
+	// }
 
 	clen := len(cols)
 	for i := 0; i < len(args); i++ {
@@ -176,9 +223,9 @@ func (e *DB) update(table string, data interface{}, parseFn func(data interface{
 }
 
 func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
-	return e.update(table, data, parseAll, fn)
-}
-
-func (e *DB) UpdateMaps(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
-	return e.update(table, data, parseValues, fn)
+	cols, args, err := parseMap(ztype.ToMap(data), nil)
+	if err != nil {
+		return 0, err
+	}
+	return e.update(table, cols, args, fn)
 }

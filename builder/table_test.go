@@ -19,12 +19,13 @@ func TestCreateTable(t *testing.T) {
 	tt := zlsgo.NewTest(t)
 
 	b := builder.CreateTable("user").IfNotExists()
+	b.SetDriver(&sqlite3.Config{})
 	b.Define("id", "BIGINT(20)", "NOT NULL", "AUTO_INCREMENT", "PRIMARY KEY", `COMMENT "用户ID"`)
 
 	sql := b.String()
 	t.Log(sql)
 
-	tt.Equal(`CREATE TABLE IF NOT EXISTS user (id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT "用户ID")`, sql)
+	tt.EqualExit(`CREATE TABLE IF NOT EXISTS "user" (id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT "用户ID")`, sql)
 
 	b = builder.CreateTempTable("user").IfNotExists()
 	b.SetDriver(&mysql.Config{})
@@ -38,25 +39,25 @@ func TestCreateTable(t *testing.T) {
 	sql = b.String()
 	t.Log(sql)
 
-	tt.Equal(`CREATE TEMPORARY TABLE IF NOT EXISTS user (id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, modified_at DATETIME NOT NULL, KEY idx_name_modified_at name, modified_at) DEFAULT CHARACTER SET utf8mb4`, sql)
+	tt.Equal("CREATE TEMPORARY TABLE IF NOT EXISTS `user` (id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, modified_at DATETIME NOT NULL, KEY idx_name_modified_at name, modified_at) DEFAULT CHARACTER SET utf8mb4", sql)
 }
 
 func TestCreateTableQuick(t *testing.T) {
 	tt := zlsgo.NewTest(t)
 
 	for dialect, expected := range map[driver.Dialect]string{
-		&mysql.Config{}:   "CREATE TABLE user (id tinyint UNSIGNED PRIMARY KEY COMMENT 'ID', name varchar(100) COMMENT '用户名', created_at datetime NOT NULL COMMENT '创建时间') DEFAULT CHARACTER SET utf8mb4",
-		&sqlite3.Config{}: "CREATE TABLE user (id integer PRIMARY KEY, name text, created_at datetime NOT NULL)",
+		&mysql.Config{}:   "CREATE TABLE `user` (`id` bigint UNSIGNED PRIMARY KEY COMMENT 'ID', `name` varchar(100) COMMENT '用户名', `body` longblob NOT NULL COMMENT '数据', `created_at` datetime NOT NULL COMMENT '创建时间') DEFAULT CHARACTER SET utf8mb4",
+		&sqlite3.Config{}: `CREATE TABLE "user" ("id" integer PRIMARY KEY, "name" text, "body" blob NOT NULL, "created_at" datetime NOT NULL)`,
 	} {
 		b := builder.CreateTable("user")
-		d, ok := dialect.(driver.IfeConfig)
+		_, ok := dialect.(driver.IfeConfig)
 		if !ok {
 			t.Errorf("%T is not zdb.IfeConfig", dialect)
 		}
-		_ = d
+
 		b.SetDriver(dialect)
 
-		b.Column(schema.NewFieldForValue("id", uint8(0), func(field *schema.Field) {
+		b.Column(schema.NewFieldForValue("id", 0, func(field *schema.Field) {
 			field.PrimaryKey = true
 			field.Comment = "ID"
 		}))
@@ -65,6 +66,10 @@ func TestCreateTableQuick(t *testing.T) {
 			field.Size = 100
 			field.NotNull = false
 			field.Comment = "用户名"
+		}))
+
+		b.Column(schema.NewField("body", schema.Bytes, func(field *schema.Field) {
+			field.Comment = "数据"
 		}))
 
 		b.Column(schema.NewFieldForValue("created_at", time.Time{}, func(field *schema.Field) {
@@ -86,7 +91,7 @@ func TestDropTable(t *testing.T) {
 
 	sql := builder.NewTable("user").Drop()
 
-	tt.Equal("DROP TABLE user", sql)
+	tt.Equal(`DROP TABLE "user"`, sql)
 }
 
 func TestHasTable(t *testing.T) {

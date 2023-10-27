@@ -32,7 +32,7 @@ type rawArgs struct {
 	expr string
 }
 
-// Raw marks the expr as a raw value which will not be added to args.
+// Raw marks the expr as a raw value which will not be added to Cond.
 func Raw(expr string) interface{} {
 	return rawArgs{expr}
 }
@@ -42,11 +42,11 @@ func Named(name string, arg interface{}) interface{} {
 	return zutil.Named(name, arg)
 }
 
-func argsCompileHandler(args *buildArgs) zutil.ArgsOpt {
+func argsCompileHandler(args *BuildCond) zutil.ArgsOpt {
 	return zutil.WithCompileHandler(func(buf *bytes.Buffer, values []interface{}, arg interface{}) ([]interface{}, bool) {
 		switch a := arg.(type) {
 		case Builder:
-			s, args := a.Build()
+			s, args, _ := a.Build()
 			buf.WriteString(s)
 			if len(args) > 0 {
 				values = append(values, args...)
@@ -71,24 +71,4 @@ func argsCompileHandler(args *buildArgs) zutil.ArgsOpt {
 
 		return values, true
 	})
-}
-
-type buildArgs struct {
-	driver driver.Dialect
-	zutil.Args
-}
-
-func NewArgs(onlyNamed bool) *buildArgs {
-	args := &buildArgs{
-		driver: DefaultDriver,
-	}
-
-	opts := []zutil.ArgsOpt{argsCompileHandler(args)}
-	if onlyNamed {
-		opts = append(opts, zutil.WithOnlyNamed())
-	}
-
-	a := zutil.NewArgs(opts...)
-	args.Args = *a
-	return args
 }

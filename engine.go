@@ -11,23 +11,24 @@ func (e *DB) GetDriver() driver.Dialect {
 	return e.pools[0].driver
 }
 
-func (e *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (e *DB) Exec(sql string, values ...interface{}) (sql.Result, error) {
 	db, err := e.getSession(nil, true)
 	if err != nil {
 		return nil, err
 	}
 	defer e.putSessionPool(db, false)
-	return db.execContext(db.ctx, query, args...)
+
+	return db.execContext(db.ctx, sql, values...)
 }
 
-func (e *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (e *DB) Query(sql string, values ...interface{}) (*sql.Rows, error) {
 	db, err := e.getSession(nil, false)
 	if err != nil {
 		return nil, err
 	}
 	defer e.putSessionPool(db, false)
 
-	return db.queryContext(db.ctx, query, args...)
+	return db.queryContext(db.ctx, sql, values...)
 }
 
 func (e *DB) Transaction(run DBCallback, ctx ...context.Context) error {

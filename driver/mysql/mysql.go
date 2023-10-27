@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/sohaha/zlsgo/zlog"
 	"github.com/zlsgo/zdb/driver"
 
 	"github.com/sohaha/zlsgo/zstring"
@@ -19,17 +21,17 @@ var (
 
 // Config databaseName configuration
 type Config struct {
+	driver.Typ
 	db         *sql.DB
-	Password   string
 	dsn        string
 	Host       string
-	Parameters string
+	Port       int
 	User       string
+	Password   string
 	DBName     string
 	Charset    string
 	Zone       string
-	driver.Typ
-	Port int
+	Parameters string
 }
 
 func (c *Config) DB() *sql.DB {
@@ -64,6 +66,7 @@ func (c *Config) GetDsn() string {
 	// 	loc = url.QueryEscape(timezone)
 	// 	timezone = url.QueryEscape("'" + timezone + "'")
 	// }
+
 	loc := ""
 	if c.Zone != "" {
 		loc = "loc=" + url.QueryEscape(c.Zone) + "&"
@@ -89,4 +92,15 @@ func (c *Config) GetDriver() string {
 
 func (c *Config) Value() driver.Typ {
 	return driver.MySQL
+}
+
+func init() {
+	_ = mysql.SetLogger(&log{})
+}
+
+type log struct {
+}
+
+func (l log) Print(v ...interface{}) {
+	zlog.Debug(append([]interface{}{"[mysql] "}, v...)...)
 }

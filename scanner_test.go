@@ -13,10 +13,10 @@ func TestScan(t *testing.T) {
 	}
 	t.Log(m)
 	var r struct {
-		Date JsonTime `json:"Date"`
 		Name string   `json:"name"`
+		Date JsonTime `json:"Date"`
 	}
 
-	// t.Log(scan([]ztype.Map{ztype.Map(m)}, &r))
+	// t.Log(scan([]ztype.Var{ztype.Var(m)}, &r))
 	t.Log(r)
 }

@@ -10,44 +10,44 @@ import (
 
 // UnionBuilder is a builder to build UNION
 type UnionBuilder struct {
-	args        *buildArgs
+	limit       int
+	offset      int
 	opt         string
 	order       string
-	orderByCols []string
+	cond        *BuildCond
 	builders    []*SelectBuilder
-	offset      int
-	limit       int
+	orderByCols []string
 }
 
 var _ Builder = new(UnionBuilder)
 
 // Union creates a new UNION builder
 func Union(builders ...*SelectBuilder) *UnionBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &UnionBuilder{
 		opt:      " UNION ",
 		limit:    -1,
 		offset:   -1,
-		args:     cond.Args,
+		cond:     cond,
 		builders: builders,
 	}
 }
 
 // UnionAll creates a new UNION builder using UNION ALL operator
 func UnionAll(builders ...*SelectBuilder) *UnionBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &UnionBuilder{
 		opt:      " UNION ALL ",
 		limit:    -1,
 		offset:   -1,
-		args:     cond.Args,
+		cond:     cond,
 		builders: builders,
 	}
 }
 
 // SetDriver Set the compilation statements driver
 func (b *UnionBuilder) SetDriver(driver driver.Dialect) *UnionBuilder {
-	b.args.driver = driver
+	b.cond.driver = driver
 	return b
 }
 
@@ -87,14 +87,15 @@ func (b *UnionBuilder) String() string {
 	return s
 }
 
-// Build returns compiled SELECT string and args
-func (b *UnionBuilder) Build() (sql string, args []interface{}) {
-	return b.build(false)
+// Build returns compiled SELECT string and Cond
+func (b *UnionBuilder) Build() (sql string, values []interface{}, err error) {
+	sql, values = b.build(false)
+	return
 }
 
 func (b *UnionBuilder) build(blend bool) (sql string, args []interface{}) {
 	buf := &bytes.Buffer{}
-	driverType := b.args.driver.Value()
+	driverType := b.cond.driver.Value()
 	if len(b.builders) > 0 {
 		needParen := driverType != driver.SQLite
 
@@ -147,15 +148,15 @@ func (b *UnionBuilder) build(blend bool) (sql string, args []interface{}) {
 	}
 
 	if blend {
-		return b.args.CompileString(buf.String()), nil
+		return b.cond.CompileString(buf.String()), nil
 	}
 
-	return b.args.Compile(buf.String())
+	return b.cond.Compile(buf.String())
 }
 
 // Var returns a placeholder for value
 func (b *UnionBuilder) Var(arg interface{}) string {
-	return b.args.Map(arg)
+	return b.cond.Var(arg)
 }
 
 func (b *UnionBuilder) Safety() error {

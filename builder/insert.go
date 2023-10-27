@@ -10,20 +10,21 @@ import (
 
 // InsertBuilder is a builder to build INSERT
 type InsertBuilder struct {
-	args   *buildArgs
 	verb   string
 	table  string
 	cols   []string
 	values [][]string
+
+	cond *BuildCond
 }
 
 var _ Builder = new(InsertBuilder)
 
 // Insert sets table name in INSERT
 func Insert(table string) *InsertBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &InsertBuilder{
-		args:  cond.Args,
+		cond:  cond,
 		verb:  "INSERT",
 		table: table,
 	}
@@ -31,9 +32,9 @@ func Insert(table string) *InsertBuilder {
 
 // Replace Insert sets table name in INSERT, REPLACE is a MySQL to the SQL standard
 func Replace(table string) *InsertBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &InsertBuilder{
-		args:  cond.Args,
+		cond:  cond,
 		verb:  "REPLACE",
 		table: table,
 	}
@@ -41,9 +42,9 @@ func Replace(table string) *InsertBuilder {
 
 // InsertIgnore sets table name in INSERT IGNORE
 func InsertIgnore(table string) *InsertBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &InsertBuilder{
-		args:  cond.Args,
+		cond:  cond,
 		verb:  "INSERT IGNORE",
 		table: table,
 	}
@@ -56,11 +57,11 @@ func (b *InsertBuilder) Cols(col ...string) *InsertBuilder {
 }
 
 // Values adds a list of values for a row in INSERT
-func (b *InsertBuilder) Values(value ...interface{}) *InsertBuilder {
-	placeholders := make([]string, 0, len(value))
+func (b *InsertBuilder) Values(v ...interface{}) *InsertBuilder {
+	placeholders := make([]string, 0, len(v))
 
-	for _, v := range value {
-		placeholders = append(placeholders, b.args.Map(v))
+	for _, v := range v {
+		placeholders = append(placeholders, b.cond.Var(v))
 	}
 
 	b.values = append(b.values, placeholders)
@@ -73,9 +74,10 @@ func (b *InsertBuilder) String() string {
 	return sql
 }
 
-// Build returns compiled INSERT string and args
-func (b *InsertBuilder) Build() (sql string, args []interface{}) {
-	return b.build(false)
+// Build returns compiled INSERT string and Cond
+func (b *InsertBuilder) Build() (sql string, values []interface{}, err error) {
+	sql, values = b.build(false)
+	return
 }
 
 func (b *InsertBuilder) build(blend bool) (sql string, args []interface{}) {
@@ -83,10 +85,10 @@ func (b *InsertBuilder) build(blend bool) (sql string, args []interface{}) {
 	defer zutil.PutBuff(buf)
 	buf.WriteString(b.verb)
 	buf.WriteString(" INTO ")
-	buf.WriteString(b.table)
+	buf.WriteString(b.cond.driver.Value().Quote(b.table))
 	if len(b.cols) > 0 {
 		buf.WriteString(" (")
-		buf.WriteString(strings.Join(b.cols, ", "))
+		buf.WriteString(strings.Join(b.cond.driver.Value().QuoteCols(b.cols), ", "))
 		buf.WriteString(")")
 	}
 
@@ -100,21 +102,21 @@ func (b *InsertBuilder) build(blend bool) (sql string, args []interface{}) {
 	buf.WriteString(strings.Join(values, ", "))
 
 	if blend {
-		return b.args.CompileString(buf.String()), nil
+		return b.cond.CompileString(buf.String()), nil
 	}
 
-	return b.args.Compile(buf.String())
+	return b.cond.Compile(buf.String())
 }
 
 // SetDriver Set the compilation statements driver
 func (b *InsertBuilder) SetDriver(driver driver.Dialect) *InsertBuilder {
-	b.args.driver = driver
+	b.cond.driver = driver
 	return b
 }
 
 // Var returns a placeholder for value
 func (b *InsertBuilder) Var(arg interface{}) string {
-	return b.args.Map(arg)
+	return b.cond.Var(arg)
 }
 
 func (b *InsertBuilder) Safety() error {

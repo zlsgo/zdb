@@ -3,8 +3,6 @@ package sqlite3
 import (
 	"database/sql"
 
-	"github.com/sohaha/zlsgo/zfile"
-	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 )
 
@@ -13,11 +11,11 @@ var _ driver.Dialect = &Config{}
 
 // Config database configuration
 type Config struct {
-	db         *sql.DB
-	File       string
-	dsn        string
-	Parameters string
 	driver.Typ
+	File        string
+	dsn         string
+	Parameters  string
+	db          *sql.DB
 	Memory      bool
 	ForeignKeys bool
 }
@@ -44,19 +42,6 @@ func (c *Config) SetDB(db *sql.DB) {
 
 func (c *Config) SetDsn(dsn string) {
 	c.dsn = dsn
-}
-
-func (c *Config) GetDsn() string {
-	if c.dsn == "" {
-		c.Typ = driver.SQLite
-		f := c.File
-		if f == "" {
-			f = "zlsgo.db"
-		}
-		c.dsn = "file:" + zfile.RealPath(f) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "?").(string) + "&" + c.Parameters
-	}
-
-	return c.dsn
 }
 
 func (c *Config) Value() driver.Typ {

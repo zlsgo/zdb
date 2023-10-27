@@ -6,53 +6,49 @@ import (
 
 // Builder is a general SQL builder
 type Builder interface {
-	Build() (sql string, values []interface{})
-	Safety() error
+	Build() (sql string, values []interface{}, err error)
 }
 
 type compiledBuilder struct {
-	args   *buildArgs
+	Cond   *BuildCond
 	format string
 }
 
 var _ Builder = new(compiledBuilder)
 
-func (cb *compiledBuilder) Build() (sql string, values []interface{}) {
-	return cb.args.Compile(cb.format)
+func (cb *compiledBuilder) Build() (sql string, values []interface{}, err error) {
+	sql, values = cb.Cond.Compile(cb.format)
+	return
 }
 
 func (cb *compiledBuilder) BuildWithFlavor(flavor driver.Typ, initialArg ...interface{}) (sql string, args []interface{}) {
-	return cb.args.Compile(cb.format, initialArg...)
+	return cb.Cond.Compile(cb.format, initialArg...)
 }
 
 // Build creates a Builder from a format string
 func Build(format string, arg ...interface{}) Builder {
-	args := NewArgs(false)
+	args := newCond(DefaultDriver, false)
 
 	for _, a := range arg {
-		args.Map(a)
+		args.Var(a)
 	}
 
 	return &compiledBuilder{
-		args:   args,
+		Cond:   args,
 		format: format,
 	}
 }
 
 // BuildNamed creates a Builder from a format string
 func BuildNamed(format string, named map[string]interface{}) Builder {
-	args := NewArgs(true)
+	args := newCond(DefaultDriver, true)
 
 	for k := range named {
-		args.Map(Named(k, named[k]))
+		args.Var(Named(k, named[k]))
 	}
 
 	return &compiledBuilder{
-		args:   args,
+		Cond:   args,
 		format: format,
 	}
-}
-
-func (b *compiledBuilder) Safety() error {
-	return nil
 }

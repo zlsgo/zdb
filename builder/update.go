@@ -11,32 +11,31 @@ import (
 
 // UpdateBuilder is a builder to build UPDATE
 type UpdateBuilder struct {
-	Cond
-	args        *buildArgs
-	order       string
+	Cond        *BuildCond
 	table       string
 	assignments []string
 	whereExprs  []string
 	orderByCols []string
+	order       string
 	limit       int
+	allowEmpty  bool
 }
 
 var _ Builder = new(UpdateBuilder)
 
 // Update creates a new UPDATE builder
 func Update(table string) *UpdateBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &UpdateBuilder{
-		Cond:  *cond,
 		limit: -1,
-		args:  cond.Args,
+		Cond:  cond,
 		table: Escape(table),
 	}
 }
 
 // SetDriver Set the compilation statements driver
 func (b *UpdateBuilder) SetDriver(driver driver.Dialect) *UpdateBuilder {
-	b.args.driver = driver
+	b.Cond.driver = driver
 	return b
 }
 
@@ -60,43 +59,43 @@ func (b *UpdateBuilder) Where(andExpr ...string) *UpdateBuilder {
 
 // Assign represents SET "field = value" in UPDATE
 func (b *UpdateBuilder) Assign(field string, value interface{}) string {
-	return Escape(field) + " = " + b.args.Map(value)
+	return b.Cond.Cond(field, " = ", value)
 }
 
 // Incr represents SET "field = field + 1" in UPDATE
 func (b *UpdateBuilder) Incr(field string) string {
-	f := Escape(field)
+	f := b.Cond.quoteField(field)
 	return f + " = " + f + " + 1"
 }
 
 // Decr represents SET "field = field - 1" in UPDATE
 func (b *UpdateBuilder) Decr(field string) string {
-	f := Escape(field)
+	f := b.Cond.quoteField(field)
 	return f + " = " + f + " - 1"
 }
 
 // Add represents SET "field = field + value" in UPDATE
 func (b *UpdateBuilder) Add(field string, value interface{}) string {
-	f := Escape(field)
-	return f + " = " + f + " + " + b.args.Map(value)
+	f := b.Cond.quoteField(field)
+	return f + " = " + f + " + " + b.Cond.Var(value)
 }
 
 // Sub represents SET "field = field - value" in UPDATE
 func (b *UpdateBuilder) Sub(field string, value interface{}) string {
-	f := Escape(field)
-	return f + " = " + f + " - " + b.args.Map(value)
+	f := b.Cond.quoteField(field)
+	return f + " = " + f + " - " + b.Cond.Var(value)
 }
 
 // Mul represents SET "field = field * value" in UPDATE
 func (b *UpdateBuilder) Mul(field string, value interface{}) string {
-	f := Escape(field)
-	return f + " = " + f + " * " + b.args.Map(value)
+	f := b.Cond.quoteField(field)
+	return f + " = " + f + " * " + b.Cond.Var(value)
 }
 
 // Div represents SET "field = field / value" in UPDATE
 func (b *UpdateBuilder) Div(field string, value interface{}) string {
-	f := Escape(field)
-	return f + " = " + f + " / " + b.args.Map(value)
+	f := b.Cond.quoteField(field)
+	return f + " = " + f + " / " + b.Cond.Var(value)
 }
 
 // OrderBy sets columns of ORDER BY in UPDATE
@@ -129,9 +128,14 @@ func (b *UpdateBuilder) String() string {
 	return s
 }
 
-// Build returns compiled UPDATE string and args
-func (b *UpdateBuilder) Build() (sql string, args []interface{}) {
-	return b.build(false)
+// Build returns compiled UPDATE string and Cond
+func (b *UpdateBuilder) Build() (sql string, value []interface{}, err error) {
+	if len(b.whereExprs) == 0 {
+		return "", nil, errors.New("update safety error: no where condition")
+	}
+
+	sql, value = b.build(false)
+	return
 }
 
 func (b *UpdateBuilder) buildStatement() []byte {
@@ -144,7 +148,7 @@ func (b *UpdateBuilder) buildStatement() []byte {
 
 	if len(b.orderByCols) > 0 {
 		buf.WriteString(" ORDER BY ")
-		buf.WriteString(strings.Join(b.orderByCols, ", "))
+		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.orderByCols), ", "))
 
 		if b.order != "" {
 			buf.WriteRune(' ')
@@ -160,13 +164,13 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 	defer zutil.PutBuff(buf)
 
 	buf.WriteString("UPDATE ")
-	buf.WriteString(b.table)
+	buf.WriteString(b.Cond.driver.Value().Quote(b.table))
 
 	buf.WriteString(" SET ")
 	buf.WriteString(strings.Join(b.assignments, ", "))
 
 	if b.limit >= 0 {
-		if b.args.driver.Value() == driver.SQLite {
+		if b.Cond.driver.Value() == driver.SQLite {
 			buf.WriteString(" WHERE ")
 			buf.WriteString(IDKey)
 			buf.WriteString(" IN (")
@@ -174,7 +178,7 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 			buf.WriteString("SELECT ")
 			buf.WriteString(IDKey)
 			buf.WriteString(" FROM ")
-			buf.WriteString(b.table)
+			buf.WriteString(b.Cond.driver.Value().Quote(b.table))
 			buf.Write(b.buildStatement())
 			buf.WriteString(" LIMIT ")
 			buf.WriteString(strconv.Itoa(b.limit))
@@ -191,15 +195,8 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 	}
 
 	if blend {
-		return b.args.CompileString(buf.String()), nil
+		return b.Cond.CompileString(buf.String()), nil
 	}
 
-	return b.args.Compile(buf.String())
-}
-
-func (b *UpdateBuilder) Safety() error {
-	if len(b.whereExprs) == 0 {
-		return errors.New("update safety error: no where condition")
-	}
-	return nil
+	return b.Cond.Compile(buf.String())
 }

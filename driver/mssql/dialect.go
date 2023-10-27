@@ -36,6 +36,7 @@ func autoIncrement(f *schema.Field, sqlType string) string {
 		return sqlType
 	}
 }
+
 func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 	t := zstring.Buffer()
 	switch f.DataType {

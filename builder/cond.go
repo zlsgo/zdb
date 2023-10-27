@@ -2,114 +2,131 @@ package builder
 
 import (
 	"strings"
+
+	"github.com/sohaha/zlsgo/zutil"
+	"github.com/zlsgo/zdb/driver"
 )
 
-// Cond provides several helper methods to build conditions
-type Cond struct {
-	Args *buildArgs
+type BuildCond struct {
+	zutil.Args
+	driver driver.Dialect
 }
 
-// NewCond returns a new Cond
-func NewCond() *Cond {
-	args := NewArgs(false)
-	return &Cond{
-		Args: args,
+func newCond(d driver.Dialect, onlyNamed bool) *BuildCond {
+	args := &BuildCond{
+		driver: d,
 	}
+
+	opts := []zutil.ArgsOpt{argsCompileHandler(args)}
+	if onlyNamed {
+		opts = append(opts, zutil.WithOnlyNamed())
+	}
+
+	a := zutil.NewArgs(opts...)
+	args.Args = *a
+	return args
 }
 
 // EQ represents "Field = value"
-func (c *Cond) EQ(field string, value interface{}) string {
-	return Escape(field) + " = " + c.Args.Map(value)
+func (c *BuildCond) EQ(field string, value interface{}) string {
+	return c.Cond(field, " = ", value)
 }
 
 // NE represents "Field != value"
-func (c *Cond) NE(field string, value interface{}) string {
-	return Escape(field) + " <> " + c.Args.Map(value)
+func (c *BuildCond) NE(field string, value interface{}) string {
+	return c.Cond(field, " <> ", value)
 }
 
 // GT represents "Field > value"
-func (c *Cond) GT(field string, value interface{}) string {
-	return Escape(field) + " > " + c.Args.Map(value)
+func (c *BuildCond) GT(field string, value interface{}) string {
+	return c.Cond(field, " > ", value)
 }
 
 // GE represents "Field >= value"
-func (c *Cond) GE(field string, value interface{}) string {
-	return Escape(field) + " >= " + c.Args.Map(value)
+func (c *BuildCond) GE(field string, value interface{}) string {
+	return c.Cond(field, " >= ", value)
 }
 
 // LT represents "Field < value"
-func (c *Cond) LT(field string, value interface{}) string {
-	return Escape(field) + " < " + c.Args.Map(value)
+func (c *BuildCond) LT(field string, value interface{}) string {
+	return c.Cond(field, " < ", value)
 }
 
 // LE represents "Field <= value"
-func (c *Cond) LE(field string, value interface{}) string {
-	return Escape(field) + " <= " + c.Args.Map(value)
+func (c *BuildCond) LE(field string, value interface{}) string {
+	return c.Cond(field, " <= ", value)
 }
 
 // In represents "Field IN (value...)"
-func (c *Cond) In(field string, value ...interface{}) string {
+func (c *BuildCond) In(field string, value ...interface{}) string {
 	vs := make([]string, 0, len(value))
 
 	for _, v := range value {
-		vs = append(vs, c.Args.Map(v))
+		vs = append(vs, c.Var(v))
 	}
-
-	return Escape(field) + " IN (" + strings.Join(vs, ", ") + ")"
+	return c.quoteField(field) + " IN (" + strings.Join(vs, ", ") + ")"
 }
 
 // NotIn represents "Field NOT IN (value...)"
-func (c *Cond) NotIn(field string, value ...interface{}) string {
+func (c *BuildCond) NotIn(field string, value ...interface{}) string {
 	vs := make([]string, 0, len(value))
 
 	for _, v := range value {
-		vs = append(vs, c.Args.Map(v))
+		vs = append(vs, c.Var(v))
 	}
 
-	return Escape(field) + " NOT IN (" + strings.Join(vs, ", ") + ")"
+	return c.quoteField(field) + " NOT IN (" + strings.Join(vs, ", ") + ")"
 }
 
 // Like represents "Field LIKE value"
-func (c *Cond) Like(field string, value interface{}) string {
-	return Escape(field) + " LIKE " + c.Args.Map(value)
+func (c *BuildCond) Like(field string, value interface{}) string {
+	return c.quoteField(field) + " LIKE " + c.Var(value)
 }
 
 // NotLike represents "Field NOT LIKE value"
-func (c *Cond) NotLike(field string, value interface{}) string {
-	return Escape(field) + " NOT LIKE " + c.Args.Map(value)
+func (c *BuildCond) NotLike(field string, value interface{}) string {
+	return c.quoteField(field) + " NOT LIKE " + c.Var(value)
 }
 
 // IsNull represents "Field IS NULL"
-func (c *Cond) IsNull(field string) string {
-	return Escape(field) + " IS NULL"
+func (c *BuildCond) IsNull(field string) string {
+	return c.quoteField(field) + " IS NULL"
 }
 
 // IsNotNull represents "Field IS NOT NULL"
-func (c *Cond) IsNotNull(field string) string {
-	return Escape(field) + " IS NOT NULL"
+func (c *BuildCond) IsNotNull(field string) string {
+	return c.quoteField(field) + " IS NOT NULL"
 }
 
 // Between represents "Field BETWEEN lower AND upper"
-func (c *Cond) Between(field string, lower, upper interface{}) string {
-	return Escape(field) + " BETWEEN " + c.Args.Map(lower) + " AND " + c.Args.Map(upper)
+func (c *BuildCond) Between(field string, lower, upper interface{}) string {
+	return c.quoteField(field) + " BETWEEN " + c.Var(lower) + " AND " + c.Var(upper)
 }
 
 // NotBetween represents "Field NOT BETWEEN lower AND upper"
-func (c *Cond) NotBetween(field string, lower, upper interface{}) string {
-	return Escape(field) + " NOT BETWEEN " + c.Args.Map(lower) + " AND " + c.Args.Map(upper)
+func (c *BuildCond) NotBetween(field string, lower, upper interface{}) string {
+	return c.quoteField(field) + " NOT BETWEEN " + c.Var(lower) + " AND " + c.Var(upper)
 }
 
 // Or represents OR logic like "expr1 OR expr2 OR expr3"
-func (c *Cond) Or(orExpr ...string) string {
+func (c *BuildCond) Or(orExpr ...string) string {
 	return "(" + strings.Join(orExpr, " OR ") + ")"
 }
 
 // And represents AND logic like "expr1 AND expr2 AND expr3"
-func (c *Cond) And(expr ...string) string {
+func (c *BuildCond) And(expr ...string) string {
 	return "(" + strings.Join(expr, " AND ") + ")"
 }
 
-// Var returns a placeholder for value
-func (c *Cond) Var(value interface{}) string {
-	return c.Args.Map(value)
+func (c *BuildCond) Cond(field, condition string, value interface{}) string {
+	switch v := value.(type) {
+	case func() string:
+		return c.quoteField(field) + condition + "(" + v() + ")"
+	default:
+		return c.quoteField(field) + condition + c.Var(value)
+	}
+}
+
+func (c *BuildCond) quoteField(field string) string {
+	return c.driver.Value().Quote(Escape(field))
 }

@@ -11,12 +11,11 @@ import (
 
 // DeleteBuilder is a builder to build DELETE
 type DeleteBuilder struct {
-	Cond
-	args        *buildArgs
+	Cond        *BuildCond
 	table       string
-	order       string
 	whereExprs  []string
 	orderByCols []string
+	order       string
 	limit       int
 }
 
@@ -24,18 +23,17 @@ var _ Builder = new(DeleteBuilder)
 
 // Delete creates a new DELETE builder
 func Delete(table string) *DeleteBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &DeleteBuilder{
-		Cond:  *cond,
+		Cond:  cond,
 		limit: -1,
-		args:  cond.Args,
 		table: Escape(table),
 	}
 }
 
 // SetDriver Set the compilation statements driver
 func (b *DeleteBuilder) SetDriver(driver driver.Dialect) *DeleteBuilder {
-	b.args.driver = driver
+	b.Cond.driver = driver
 	return b
 }
 
@@ -75,18 +73,14 @@ func (b *DeleteBuilder) String() string {
 	return s
 }
 
-// Safety check
-func (b *DeleteBuilder) Safety() error {
+// Build returns compiled DELETE string and Cond
+func (b *DeleteBuilder) Build() (sql string, values []interface{}, err error) {
 	if len(b.whereExprs) == 0 {
-		return errors.New("update safety error: no where condition")
+		return "", nil, errors.New("update safety error: no where condition")
 	}
 
-	return nil
-}
-
-// Build returns compiled DELETE string and args
-func (b *DeleteBuilder) Build() (sql string, args []interface{}) {
-	return b.build(false)
+	sql, values = b.build(false)
+	return
 }
 
 func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
@@ -94,7 +88,7 @@ func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
 	defer zutil.PutBuff(buf)
 
 	buf.WriteString("DELETE FROM ")
-	buf.WriteString(b.table)
+	buf.WriteString(b.Cond.driver.Value().Quote(b.table))
 
 	if len(b.whereExprs) > 0 {
 		buf.WriteString(" WHERE ")
@@ -103,7 +97,7 @@ func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
 
 	if len(b.orderByCols) > 0 {
 		buf.WriteString(" ORDER BY ")
-		buf.WriteString(strings.Join(b.orderByCols, ", "))
+		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.orderByCols), ", "))
 
 		if b.order != "" {
 			buf.WriteRune(' ')
@@ -117,8 +111,8 @@ func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
 	}
 
 	if blend {
-		return b.args.CompileString(buf.String()), nil
+		return b.Cond.CompileString(buf.String()), nil
 	}
 
-	return b.args.Compile(buf.String())
+	return b.Cond.Compile(buf.String())
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lib/pq"
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -12,18 +11,19 @@ import (
 )
 
 type TableBuilder struct {
-	args  *buildArgs
 	table string
+	args  *BuildCond
 }
+
 type (
 	// CreateTableBuilder is a builder to build CREATE TABLE
 	CreateTableBuilder struct {
 		*TableBuilder
+		ifNotExists bool
 		verb        string
 		defines     [][]string
 		options     [][]string
 		columns     []*schema.Field
-		ifNotExists bool
 	}
 )
 
@@ -31,10 +31,10 @@ var _ Builder = new(CreateTableBuilder)
 
 // NewTable creates a new table builder
 func NewTable(table string) *TableBuilder {
-	args := NewArgs(false)
+	args := newCond(DefaultDriver, false)
 	b := &TableBuilder{
 		args:  args,
-		table: Escape(table),
+		table: table,
 	}
 	return b
 }
@@ -51,14 +51,14 @@ func (b *TableBuilder) GetDriver() driver.Dialect {
 // Drop delete table
 func (b *TableBuilder) tableName() string {
 	typ := b.args.driver.Value()
-	switch typ {
-	case driver.PostgreSQL:
-		if !strings.ContainsRune(b.table, '.') {
-			return pq.QuoteIdentifier(b.table)
-		}
-	}
+	// switch typ {
+	// case driver.PostgreSQL:
+	// 	if !strings.ContainsRune(b.table, '.') {
+	// 		return pq.QuoteIdentifier(b.table)
+	// 	}
+	// }
 
-	return b.table
+	return typ.Quote(b.table)
 }
 
 // Create creates a new CREATE TABLE builder
@@ -97,17 +97,17 @@ func (b *TableBuilder) GetColumn() (sql string, values []interface{}, process fu
 
 // RenameColumn rename table column
 func (b *TableBuilder) RenameColumn(oldName, newName string) (sql string, values []interface{}) {
-	return b.args.driver.RenameColumn(b.table, oldName, newName)
+	return b.args.driver.RenameColumn(b.table, b.args.driver.Value().Quote(oldName), b.args.driver.Value().Quote(newName))
 }
 
 func (b *TableBuilder) AddColumn(name string, dataType schema.DataType, fieldOption ...func(*schema.Field)) (sql string, values []interface{}) {
 	f := schema.NewField(name, dataType, fieldOption...)
 	t := b.args.driver.DataTypeOf(f)
-	return fmt.Sprintf("ALTER TABLE %s ADD %s %s", b.table, name, t), []interface{}{}
+	return fmt.Sprintf("ALTER TABLE %s ADD %s %s", b.args.quoteField(b.table), b.args.driver.Value().Quote(f.Name), t), []interface{}{}
 }
 
 func (b *TableBuilder) DropColumn(name string) (sql string, values []interface{}) {
-	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", b.table, name), []interface{}{}
+	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", b.table, b.args.driver.Value().Quote(name)), []interface{}{}
 }
 
 // CreateTable creates a new CREATE TABLE builder
@@ -157,13 +157,12 @@ func (b *CreateTableBuilder) buildColumns() {
 		return
 	}
 
-	// typ := b.args.driver.Value()
+	// typ := b.Cond.driver.Value()
 	columns := make([][]string, 0, l)
 
 	for _, f := range b.columns {
 		def := make([]string, 0, 3)
-
-		def = append(def, f.Name)
+		def = append(def, b.args.driver.Value().Quote(f.Name))
 		def = append(def, b.args.driver.DataTypeOf(f))
 
 		columns = append(columns, def)
@@ -172,8 +171,8 @@ func (b *CreateTableBuilder) buildColumns() {
 	b.columns = b.columns[0:0:0]
 }
 
-// Build returns compiled CREATE TABLE string and args
-func (b *CreateTableBuilder) Build() (sql string, values []interface{}) {
+// Build returns compiled CREATE TABLE string and Cond
+func (b *CreateTableBuilder) Build() (sql string, values []interface{}, err error) {
 	buf := zutil.GetBuff(256)
 	defer zutil.PutBuff(buf)
 
@@ -191,8 +190,8 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}) {
 		buf.WriteString(" (")
 
 		defs := make([]string, 0, len(b.defines))
-		for _, def := range b.defines {
-			defs = append(defs, strings.Join(def, " "))
+		for i := range b.defines {
+			defs = append(defs, strings.Join(b.defines[i], " "))
 		}
 		buf.WriteString(strings.Join(defs, ", "))
 
@@ -209,12 +208,13 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}) {
 		buf.WriteString(strings.Join(opts, ", "))
 	}
 
-	return b.args.Compile(buf.String())
+	sql, values = b.args.Compile(buf.String())
+	return
 }
 
 // String returns the compiled INSERT string
 func (b *CreateTableBuilder) String() string {
-	s, _ := b.Build()
+	s, _, _ := b.Build()
 	return s
 }
 

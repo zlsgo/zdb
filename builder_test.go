@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sohaha/zlsgo"
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb"
 	"github.com/zlsgo/zdb/builder"
 	"github.com/zlsgo/zdb/testdata"
@@ -11,13 +12,14 @@ import (
 
 type user struct {
 	Name string `json:"name"`
-	ID   string `json:"id"`
 	Age  int    `json:"age"`
+	ID   string `json:"id"`
 }
 
 func TestBuilder(t *testing.T) {
 	tt := zlsgo.NewTest(t)
 
+	// zdb.Debug.Store(true)
 	dbConf, clera, err := testdata.GetDbConf("")
 	tt.NoError(err)
 	defer clera()
@@ -35,14 +37,47 @@ func TestBuilder(t *testing.T) {
 
 	table := testdata.TestTable.TableName()
 
-	id, err := db.InsertAny(table, data)
+	id, err := db.Insert(table, ztype.Map{})
+	t.Log(id, err)
+	tt.EqualTrue(err != nil)
+
+	id, err = db.Insert(table, data)
 	tt.NoError(err)
 	t.Log(id)
 
+	ids, err := db.BatchInsert(table, []map[string]interface{}{
+		{
+			"name": "test2",
+			"age":  38,
+		},
+		{
+			"name": "test3",
+			"age":  58,
+		},
+	})
+	tt.NoError(err)
+	t.Log(ids)
+
+	id, err = db.Replace(table, map[string]interface{}{
+		"name": "new2",
+		"id":   2,
+		"age":  888,
+	})
+	tt.NoError(err)
+	t.Log(id)
+
+	ids, err = db.BatchReplace(table, []map[string]interface{}{
+		{
+			"name": "new3",
+			"id":   3,
+			"age":  666,
+		},
+	})
+	tt.NoError(err)
+	t.Log(ids)
+
 	_ = db.Source(func(e *zdb.DB) error {
-		t.Log(&db, &e)
-		t.Logf("%+v %+v\n", db, e)
-		id, err = e.InsertAny(table, map[string]interface{}{
+		id, err = e.Insert(table, map[string]interface{}{
 			"name":  "ok",
 			"is_ok": 100,
 		})
@@ -51,16 +86,18 @@ func TestBuilder(t *testing.T) {
 		return nil
 	})
 
-	id, err = db.InsertAny(table, []map[string]interface{}{data, data, {"name": "test2", "age": 999, "xx": "xx"}})
-	tt.NoError(err)
-	t.Log(id)
-
-	_, err = db.InsertAny(table, []map[string]interface{}{data, {"xx": "xx"}})
+	_, err = db.Insert(table, map[string]interface{}{"xx": "xx"})
 	tt.EqualTrue(err != nil)
 	t.Log(err)
 
+	rows, err := db.Find(table, func(b *builder.SelectBuilder) error {
+		return nil
+	})
+	tt.NoError(err)
+	tt.Equal(4, len(rows))
+
 	row, err := db.FindOne(table, func(sb *builder.SelectBuilder) error {
-		sb.Where(sb.GE("is_ok", 1))
+		sb.Where(sb.Cond.GE("is_ok", 1))
 		t.Log(sb.String())
 		return nil
 	})
@@ -69,8 +106,8 @@ func TestBuilder(t *testing.T) {
 	t.Log(row["name"].(string), row.Get("name").String())
 	tt.Equal(row["name"].(string), row.Get("name").String())
 
-	rows, err := db.Find(table, func(sb *builder.SelectBuilder) error {
-		sb.Where(sb.GE("id", 1))
+	rows, err = db.Find(table, func(sb *builder.SelectBuilder) error {
+		sb.Where(sb.Cond.GE("id", 1))
 		t.Log(sb.String())
 		return nil
 	})
@@ -78,7 +115,7 @@ func TestBuilder(t *testing.T) {
 	t.Log(rows)
 
 	rows, pages, err := db.Pages(table, 2, 3, func(sb *builder.SelectBuilder) error {
-		sb.Where(sb.GE("id", 1))
+		sb.Where(sb.Cond.GE("id", 1))
 		t.Log(sb.String())
 		return nil
 	})
@@ -90,31 +127,49 @@ func TestBuilder(t *testing.T) {
 	tt.NoError(err)
 	t.Log(u)
 
-	i, err := db.Update(table, zdb.QuoteCols(map[string]interface{}{"name": "new name", "age": 66}), func(b *builder.UpdateBuilder) error {
-		b.Where(b.EQ("id", 1))
-		t.Log(b.Build())
-		t.Log(33)
+	i, err := db.Update(table, ztype.Map{"name": "new name", "age": 66}, func(b *builder.UpdateBuilder) error {
+		b.Where(b.Cond.EQ("id", 1))
+		sql, values, _ := b.Build()
+		tt.Equal(`UPDATE "user" SET "name" = ?, "age" = ? WHERE "id" = ?`, sql)
+		tt.Log(sql, values)
 		return nil
 	})
 
 	tt.NoError(err)
 	tt.Equal(int64(1), i)
 
-	u, err = zdb.Find[user](db, table, func(b *builder.SelectBuilder) error {
-		b.Where(b.EQ("id", 1))
+	ur, err := zdb.FindOne[user](db, table, func(b *builder.SelectBuilder) error {
+		b.Where(b.Cond.EQ("id", 1))
 		return nil
 	})
 	tt.NoError(err)
-	tt.Equal("new name", u.Name)
+	tt.Equal("new name", ur.Name)
 	t.Logf("%+v\n", u)
 
-	_, err = db.Update(table, nil, func(b *builder.UpdateBuilder) error {
-		b.Set(b.Decr("age"), b.Assign("name", "666"))
-		b.Where(b.EQ("id", 1))
-		tt.Equal("UPDATE user SET age = age - 1, name = 666 WHERE id = 1", b.String())
+	ul, err := zdb.Find[user](db, table, func(b *builder.SelectBuilder) error {
+		b.Where(b.Cond.EQ("id", 1))
 		return nil
 	})
 	tt.NoError(err)
+	tt.Equal("new name", ul[0].Name)
+	t.Logf("%+v\n", u)
+
+	_, err = db.Update(table, ztype.Map{}, func(b *builder.UpdateBuilder) error {
+		b.Set(b.Decr("age"), b.Assign("name", "666"))
+		b.Where(b.Cond.NE("name", ""))
+		tt.Equal(`UPDATE "user" SET "age" = "age" - 1, "name" = 666 WHERE "name" <> `, b.String())
+		tt.Log(b.String())
+		return nil
+	})
+	tt.NoError(err)
+
+	_, err = db.Update(table, ztype.Map{}, func(b *builder.UpdateBuilder) error {
+		b.Set(b.Decr("age"), b.Assign("name", "666"))
+		tt.Equal(`UPDATE "user" SET "age" = "age" - 1, "name" = 666`, b.String())
+		tt.Log(b.String())
+		return nil
+	})
+	tt.EqualTrue(err != nil)
 }
 
 func TestFindComplex(t *testing.T) {
@@ -128,7 +183,7 @@ func TestFindComplex(t *testing.T) {
 	tt.NoError(err)
 
 	childTable := builder.Select().From("user")
-	childTable.Where(childTable.GE("id", 1))
+	childTable.Where(childTable.Cond.GE("id", 1))
 
 	_, err = db.FindOne(testdata.TestTable.TableName(), func(sb *builder.SelectBuilder) error {
 		sb.From(sb.BuilderAs(childTable, "c"))
@@ -138,7 +193,7 @@ func TestFindComplex(t *testing.T) {
 	t.Log(err)
 
 	_, err = db.FindOne(testdata.TestTable.TableName(), func(sb *builder.SelectBuilder) error {
-		sb.Where(sb.In("id", childTable))
+		sb.Where(sb.Cond.In("id", childTable))
 		t.Log(sb.String())
 		return nil
 	})

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/sohaha/zlsgo/zstring"
+	"github.com/sohaha/zlsgo/zutil"
 )
 
 type Session struct {
@@ -36,8 +37,7 @@ func (e *DB) putSessionPool(s *Session, force bool) {
 	sessionPool.Put(s)
 }
 
-// Debug ...
-var Debug = false
+var Debug = zutil.NewBool(false)
 
 func (e *DB) getSession(s *Session, master bool, ctx ...context.Context) (*Session, error) {
 	if e.session != nil {
@@ -67,6 +67,10 @@ func (e *DB) getSession(s *Session, master bool, ctx ...context.Context) (*Sessi
 }
 
 func (s *Session) execContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	if Debug.Load() {
+		log.Debug("SQL:", query, args)
+	}
+
 	var (
 		err  error
 		stmt *sql.Stmt
@@ -84,6 +88,10 @@ func (s *Session) execContext(ctx context.Context, query string, args ...interfa
 }
 
 func (s *Session) queryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	if Debug.Load() {
+		log.Debug("SQL:", query, args)
+	}
+
 	stmt, err := s.config.db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, err

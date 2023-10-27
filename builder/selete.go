@@ -13,23 +13,22 @@ type (
 	JoinOption string
 	// SelectBuilder is a builder to build SELECT
 	SelectBuilder struct {
-		Cond
-		args        *buildArgs
-		forWhat     string
-		order       string
-		whereExprs  []string
+		done        bool
+		distinct    bool
+		tables      []string
+		selectCols  []string
 		joinOptions []JoinOption
 		joinTables  []string
 		joinExprs   [][]string
-		selectCols  []string
+		whereExprs  []string
 		havingExprs []string
 		groupByCols []string
 		orderByCols []string
-		tables      []string
+		order       string
 		limit       int
 		offset      int
-		done        bool
-		distinct    bool
+		forWhat     string
+		Cond        *BuildCond
 	}
 )
 
@@ -47,31 +46,29 @@ var _ Builder = new(SelectBuilder)
 
 // Query return new SELECT builder
 func Query(table string) *SelectBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &SelectBuilder{
-		Cond:   *cond,
 		limit:  -1,
 		offset: -1,
-		args:   cond.Args,
+		Cond:   cond,
 		tables: []string{table},
 	}
 }
 
 // Select  return new SELECT builder and sets columns in SELECT
 func Select(cols ...string) *SelectBuilder {
-	cond := NewCond()
+	cond := newCond(DefaultDriver, false)
 	return &SelectBuilder{
-		Cond:       *cond,
 		limit:      -1,
 		offset:     -1,
-		args:       cond.Args,
+		Cond:       cond,
 		selectCols: cols,
 	}
 }
 
 // SetDriver Set the compilation statements driver
 func (b *SelectBuilder) SetDriver(driver driver.Dialect) *SelectBuilder {
-	b.args.driver = driver
+	b.Cond.driver = driver
 	return b
 }
 
@@ -89,7 +86,10 @@ func (b *SelectBuilder) From(table ...string) *SelectBuilder {
 
 // Select sets columns in SELECT
 func (b *SelectBuilder) Select(cols ...string) *SelectBuilder {
-	b.selectCols = cols
+	for i := range cols {
+		b.selectCols = append(b.selectCols, strings.Split(cols[i], ",")...)
+	}
+
 	return b
 }
 
@@ -179,7 +179,7 @@ func (b *SelectBuilder) As(name, alias string) string {
 
 // BuilderAs returns an AS expression wrapping a complex SQL
 func (b *SelectBuilder) BuilderAs(builder Builder, alias string) string {
-	return "(" + b.Var(builder) + ") AS " + alias
+	return "(" + b.Cond.Var(builder) + ") AS " + alias
 }
 
 // Build returns compiled SELECT string
@@ -188,9 +188,10 @@ func (b *SelectBuilder) String() string {
 	return sql
 }
 
-// Build returns compiled SELECT string and args
-func (b *SelectBuilder) Build() (sql string, values []interface{}) {
-	return b.build(false)
+// Build returns compiled SELECT string and Cond
+func (b *SelectBuilder) Build() (sql string, values []interface{}, err error) {
+	sql, values = b.build(false)
+	return
 }
 
 func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
@@ -202,15 +203,14 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 		buf.WriteString("DISTINCT ")
 	}
 
-	selectCols := b.selectCols
-	if len(selectCols) == 0 {
+	if len(b.selectCols) == 0 {
 		buf.WriteString("*")
 	} else {
-		buf.WriteString(strings.Join(b.selectCols, ", "))
+		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.selectCols), ", "))
 	}
 
 	buf.WriteString(" FROM ")
-	buf.WriteString(strings.Join(b.tables, ", "))
+	buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.tables), ", "))
 
 	for i := range b.joinTables {
 		if option := b.joinOptions[i]; option != "" {
@@ -253,7 +253,7 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 		}
 	}
 
-	switch b.args.driver.Value() {
+	switch b.Cond.driver.Value() {
 	default:
 		if b.limit > 0 {
 			buf.WriteString(" LIMIT ")
@@ -303,12 +303,8 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 	}
 
 	if blend {
-		return b.args.CompileString(buf.String()), nil
+		return b.Cond.CompileString(buf.String()), nil
 	}
 
-	return b.args.Compile(buf.String())
-}
-
-func (b *SelectBuilder) Safety() error {
-	return nil
+	return b.Cond.Compile(buf.String())
 }

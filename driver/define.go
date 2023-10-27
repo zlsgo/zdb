@@ -2,6 +2,7 @@ package driver
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/schema"
@@ -55,13 +56,45 @@ func (f Typ) String() string {
 }
 
 // Quote adds quote for name to make sure the name can be used safely
-func (f Typ) Quote(name string) string {
-	switch f {
-	case MySQL:
-		return "`" + name + "`"
-	case PostgreSQL, MsSQL, SQLite:
-		return `"` + name + `"`
+func (f Typ) Quote(col string) string {
+	if col == "*" || col[0] == '(' {
+		return col
 	}
 
-	return name
+	sl := strings.SplitN(col, " ", 2)
+	if strings.IndexRune(sl[0], '.') > 0 {
+		s := strings.Split(sl[0], ".")
+		for i := range s {
+			s[i] = f.quote(s[i])
+		}
+		sl[0] = strings.Join(s, ".")
+	} else {
+		sl[0] = f.quote(sl[0])
+	}
+
+	return strings.Join(sl, " ")
+}
+
+func (f Typ) quote(col string) string {
+	if strings.ContainsRune(col, '(') {
+		return col
+	}
+	switch f {
+	case MySQL:
+		return "`" + col + "`"
+	case PostgreSQL, MsSQL, SQLite:
+		return `"` + col + `"`
+	}
+
+	return col
+}
+
+func (f Typ) QuoteCols(cols []string) []string {
+	nm := make([]string, 0, len(cols))
+
+	for i := range cols {
+		nm = append(nm, f.Quote(cols[i]))
+	}
+
+	return nm
 }
