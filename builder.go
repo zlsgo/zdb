@@ -40,8 +40,8 @@ var MaxBatch = 1000
 
 func splitMaps(maps [][]interface{}) [][][]interface{} {
 	var result [][][]interface{}
-	for i := 0; i < len(maps); i += 10 {
-		end := i + 10
+	for i := 0; i < len(maps); i += MaxBatch {
+		end := i + MaxBatch
 		if end > len(maps) {
 			end = len(maps)
 		}

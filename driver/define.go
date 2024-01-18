@@ -65,6 +65,9 @@ func (f Typ) Quote(col string) string {
 	if strings.IndexRune(sl[0], '.') > 0 {
 		s := strings.Split(sl[0], ".")
 		for i := range s {
+			if s[i] == "*" {
+				continue
+			}
 			s[i] = f.quote(s[i])
 		}
 		sl[0] = strings.Join(s, ".")
