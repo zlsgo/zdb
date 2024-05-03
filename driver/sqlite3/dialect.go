@@ -80,7 +80,7 @@ func (c *Config) GetColumn(table string) (sql string, values []interface{}, proc
 }
 
 func (c *Config) RenameColumn(table, oldName, newName string) (sql string, values []interface{}) {
-	return "ALTER TABLE `" + table + "` RENAME COLUMN `" + oldName + "` TO `" + newName + "`", []interface{}{}
+	return fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s", table, oldName, newName), []interface{}{}
 }
 
 func (c *Config) HasIndex(table, name string) (sql string, values []interface{}, process func(ztype.Maps) bool) {
