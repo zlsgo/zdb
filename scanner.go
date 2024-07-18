@@ -33,11 +33,11 @@ var (
 )
 
 var convOption = func(conver *ztype.Conver) {
-	conver.ConvHook = func(i reflect.Value, o reflect.Type) (reflect.Value, error) {
+	conver.ConvHook = func(name string, i reflect.Value, o reflect.Type) (reflect.Value, bool) {
 		if i.Type().AssignableTo(timeType) {
-			return i.Convert(o), nil
+			return i.Convert(o), false
 		}
-		return i, nil
+		return i, true
 	}
 }
 
