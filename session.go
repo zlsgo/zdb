@@ -108,6 +108,7 @@ func (s *Session) transaction(run DBCallback) error {
 	s.tx = db
 	e := &DB{
 		session: s,
+		driver:  s.config.driver,
 	}
 	err = run(e)
 	if err != nil {

@@ -8,10 +8,7 @@ import (
 )
 
 func (e *DB) GetDriver() driver.Dialect {
-	if len(e.pools) == 0 {
-		return nil
-	}
-	return e.pools[0].driver
+	return e.driver
 }
 
 func (e *DB) Exec(sql string, values ...interface{}) (sql.Result, error) {
