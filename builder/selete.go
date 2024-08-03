@@ -127,6 +127,10 @@ func (b *SelectBuilder) GroupBy(col ...string) *SelectBuilder {
 
 // OrderBy sets columns of ORDER BY in SELECT
 func (b *SelectBuilder) OrderBy(col ...string) *SelectBuilder {
+	if len(col) == 0 {
+		b.orderByCols = b.orderByCols[:0]
+		return b
+	}
 	b.orderByCols = append(b.orderByCols, col...)
 	return b
 }
