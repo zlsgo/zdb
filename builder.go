@@ -159,7 +159,7 @@ func (e *DB) Pages(table string, page, pagesize int, fn ...func(b *builder.Selec
 		return resultMap, Pages{}, err
 	}
 
-	sql, values, err := b.Select(b.As("count(*)", "total")).Limit(-1).Offset(-1).Build()
+	sql, values, err := b.Select(b.As("count(*)", "total")).Limit(-1).OrderBy().Offset(-1).Build()
 	if err != nil {
 		return resultMap, Pages{}, err
 	}
