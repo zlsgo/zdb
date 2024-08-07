@@ -49,6 +49,7 @@ func splitMaps(maps [][]interface{}) [][][]interface{} {
 	}
 	return result
 }
+
 func (e *DB) batchIds(args [][]interface{}, id int64, err error) ([]int64, error) {
 	ids := make([]int64, len(args))
 	for i := 0; i < len(args); i++ {
@@ -121,7 +122,6 @@ func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (zty
 		}
 		return fn(sb)
 	})
-
 	if err != nil {
 		return ztype.Map{}, err
 	}
@@ -137,6 +137,9 @@ type Pages struct {
 
 func (e *DB) Pages(table string, page, pagesize int, fn ...func(b *builder.SelectBuilder) error) (ztype.Maps, Pages, error) {
 	var b *builder.SelectBuilder
+	if pagesize < 0 {
+		pagesize = 1
+	}
 	resultMap, err := e.Find(table, func(bui *builder.SelectBuilder) error {
 		bui.Limit(pagesize)
 		if page > 0 {
