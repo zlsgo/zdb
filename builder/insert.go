@@ -10,12 +10,12 @@ import (
 
 // InsertBuilder is a builder to build INSERT
 type InsertBuilder struct {
-	verb   string
-	table  string
-	cols   []string
-	values [][]string
-
-	cond *BuildCond
+	cond    *BuildCond
+	verb    string
+	table   string
+	cols    []string
+	values  [][]string
+	options [][]string
 }
 
 var _ Builder = new(InsertBuilder)
@@ -68,6 +68,11 @@ func (b *InsertBuilder) Values(v ...interface{}) *InsertBuilder {
 	return b
 }
 
+func (b *InsertBuilder) Option(opt ...string) *InsertBuilder {
+	b.options = append(b.options, opt)
+	return b
+}
+
 // String returns the compiled INSERT string
 func (b *InsertBuilder) String() string {
 	sql, _ := b.build(true)
@@ -100,6 +105,16 @@ func (b *InsertBuilder) build(blend bool) (sql string, args []interface{}) {
 	}
 
 	buf.WriteString(strings.Join(values, ", "))
+
+	if len(b.options) > 0 {
+		buf.WriteRune(' ')
+
+		opts := make([]string, 0, len(b.options))
+		for i := range b.options {
+			opts = append(opts, strings.Join(b.options[i], " "))
+		}
+		buf.WriteString(strings.Join(opts, ", "))
+	}
 
 	if blend {
 		return b.cond.CompileString(buf.String()), nil

@@ -13,10 +13,11 @@ import (
 type UpdateBuilder struct {
 	Cond        *BuildCond
 	table       string
+	order       string
 	assignments []string
 	whereExprs  []string
 	orderByCols []string
-	order       string
+	options     [][]string
 	limit       int
 	allowEmpty  bool
 }
@@ -122,6 +123,11 @@ func (b *UpdateBuilder) Limit(limit int) *UpdateBuilder {
 	return b
 }
 
+func (b *UpdateBuilder) Option(opt ...string) *UpdateBuilder {
+	b.options = append(b.options, opt)
+	return b
+}
+
 // String returns the compiled UPDATE string
 func (b *UpdateBuilder) String() string {
 	s, _ := b.build(true)
@@ -192,6 +198,15 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 		}
 	} else {
 		buf.Write(b.buildStatement())
+	}
+	if len(b.options) > 0 {
+		buf.WriteRune(' ')
+
+		opts := make([]string, 0, len(b.options))
+		for i := range b.options {
+			opts = append(opts, strings.Join(b.options[i], " "))
+		}
+		buf.WriteString(strings.Join(opts, ", "))
 	}
 
 	if blend {

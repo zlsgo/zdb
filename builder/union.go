@@ -10,13 +10,13 @@ import (
 
 // UnionBuilder is a builder to build UNION
 type UnionBuilder struct {
-	limit       int
-	offset      int
+	cond        *BuildCond
 	opt         string
 	order       string
-	cond        *BuildCond
 	builders    []*SelectBuilder
 	orderByCols []string
+	limit       int
+	offset      int
 }
 
 var _ Builder = new(UnionBuilder)

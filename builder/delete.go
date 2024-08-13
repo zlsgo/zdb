@@ -13,9 +13,9 @@ import (
 type DeleteBuilder struct {
 	Cond        *BuildCond
 	table       string
+	order       string
 	whereExprs  []string
 	orderByCols []string
-	order       string
 	limit       int
 }
 

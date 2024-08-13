@@ -13,14 +13,13 @@ type (
 		Name          string
 		DataType      DataType
 		RawDataType   string
-		PrimaryKey    bool
-		AutoIncrement bool
-		NotNull       bool
 		Comment       string
 		Size          uint64
 		Precision     int
 		Scale         int
-		// Quote         bool
+		PrimaryKey    bool
+		AutoIncrement bool
+		NotNull       bool
 	}
 )
 

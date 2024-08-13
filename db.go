@@ -12,16 +12,16 @@ import (
 type (
 	Config struct {
 		driver driver.Dialect
-		dsn    string
 		db     *sql.DB
+		dsn    string
 	}
 	DB struct {
-		pools   []*Config
+		driver  driver.Dialect
 		session *Session
+		pools   []*Config
 		force   bool
 		Debug   bool
 		isFixed bool
-		driver  driver.Dialect
 	}
 	JsonTime time.Time
 )

@@ -8,8 +8,8 @@ import (
 )
 
 type BuildCond struct {
-	zutil.Args
 	driver driver.Dialect
+	zutil.Args
 }
 
 func newCond(d driver.Dialect, onlyNamed bool) *BuildCond {

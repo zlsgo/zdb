@@ -16,15 +16,15 @@ var (
 
 // Config database configuration
 type Config struct {
-	driver.Typ
 	db       *sql.DB
 	dsn      string
 	Host     string
-	Port     int
 	User     string
 	Password string
 	DBName   string
 	SSLMode  string
+	driver.Typ
+	Port int
 }
 
 func (c *Config) DB() *sql.DB {

@@ -13,22 +13,22 @@ type (
 	JoinOption string
 	// SelectBuilder is a builder to build SELECT
 	SelectBuilder struct {
-		done        bool
-		distinct    bool
-		tables      []string
-		selectCols  []string
+		Cond        *BuildCond
+		order       string
+		forWhat     string
+		havingExprs []string
 		joinOptions []JoinOption
 		joinTables  []string
 		joinExprs   [][]string
 		whereExprs  []string
-		havingExprs []string
 		groupByCols []string
 		orderByCols []string
-		order       string
+		selectCols  []string
+		tables      []string
 		limit       int
 		offset      int
-		forWhat     string
-		Cond        *BuildCond
+		done        bool
+		distinct    bool
 	}
 )
 

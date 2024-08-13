@@ -21,17 +21,17 @@ var (
 
 // Config databaseName configuration
 type Config struct {
-	driver.Typ
 	db         *sql.DB
 	dsn        string
 	Host       string
-	Port       int
 	User       string
 	Password   string
 	DBName     string
 	Charset    string
 	Zone       string
 	Parameters string
+	driver.Typ
+	Port int
 }
 
 func (c *Config) DB() *sql.DB {
