@@ -90,3 +90,14 @@ func (e *DB) toDialect(c driver.IfeConfig) driver.Dialect {
 	}
 	return e.driver
 }
+
+
+func (e *DB) GetSQLDB() (*sql.DB,error) {
+	db, err := e.getSession(nil, true)
+	if err != nil {
+		return nil, err
+	}
+	defer e.putSessionPool(db, false)
+
+	return db.config.db,nil
+}
