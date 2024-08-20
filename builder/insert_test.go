@@ -26,12 +26,12 @@ func TestInsert(t *testing.T) {
 	sb = builder.Insert("user")
 	sb.SetDriver(&mysql.Config{})
 	sb.Cols("username", "age", "create_at").Values("new user", 18, builder.Raw("UNIX_TIMESTAMP(NOW())"))
-
+	sb.Option("ON DUPLICATE KEY UPDATE age = VALUES(age)")
 	sql, values, err = sb.Build()
 	tt.NoError(err)
 	tt.Log(sql, values)
 
-	tt.Equal("INSERT INTO `user` (`username`, `age`, `create_at`) VALUES (?, ?, UNIX_TIMESTAMP(NOW()))", sql)
+	tt.Equal("INSERT INTO `user` (`username`, `age`, `create_at`) VALUES (?, ?, UNIX_TIMESTAMP(NOW())) ON DUPLICATE KEY UPDATE age = VALUES(age)", sql)
 	tt.Equal([]interface{}{"new user", 18}, values)
 
 	sb = builder.Insert("user")

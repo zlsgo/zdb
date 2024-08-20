@@ -9,15 +9,19 @@ import (
 	"github.com/zlsgo/zdb/driver"
 )
 
-func (e *DB) Insert(table string, data interface{}) (lastId int64, err error) {
+func (e *DB) Insert(table string, data interface{}, options ...string) (lastId int64, err error) {
 	cols, args, err := parseMap(ztype.ToMap(data), nil)
 	if err != nil {
 		return 0, err
 	}
-	return e.insertData(builder.Insert(table), cols, args)
+	return e.insertData(builder.Insert(table), cols, args, options...)
 }
 
-func (e *DB) BatchInsert(table string, data interface{}) (lastId []int64, err error) {
+func (e *DB) BatchInsert(
+	table string,
+	data interface{},
+	options ...string,
+) (lastId []int64, err error) {
 	cols, args, err := parseMaps2(ztype.ToMaps(data))
 	if err != nil {
 		return []int64{0}, err
@@ -27,7 +31,7 @@ func (e *DB) BatchInsert(table string, data interface{}) (lastId []int64, err er
 	var id int64
 	// TODO 优化：开启事务
 	for i := range datas {
-		id, err = e.insertData(builder.Insert(table), cols, datas[i])
+		id, err = e.insertData(builder.Insert(table), cols, datas[i], options...)
 		if err != nil {
 			return []int64{0}, err
 		}
@@ -49,16 +53,34 @@ func splitMaps(maps [][]interface{}) [][][]interface{} {
 	}
 	return result
 }
+
 func (e *DB) batchIds(args [][]interface{}, id int64, err error) ([]int64, error) {
+	var sub bool
+	if e.driver.Value() == driver.MySQL {
+		sub = true
+	}
 	ids := make([]int64, len(args))
 	for i := 0; i < len(args); i++ {
-		ids[i] = id - int64(i)
+		if sub {
+			ids[i] = id + int64(i)
+		} else {
+			ids[i] = id - int64(i)
+		}
 	}
 	return ids, err
 }
 
-func (e *DB) insertData(b *builder.InsertBuilder, cols []string, args [][]interface{}) (lastId int64, err error) {
+func (e *DB) insertData(
+	b *builder.InsertBuilder,
+	cols []string,
+	args [][]interface{},
+	options ...string,
+) (lastId int64, err error) {
 	b.SetDriver(e.driver)
+
+	if len(options) > 0 {
+		b.Option(options...)
+	}
 
 	b.Cols(cols...)
 	for i := range args {
@@ -96,20 +118,34 @@ func (e *DB) insertData(b *builder.InsertBuilder, cols []string, args [][]interf
 	return result[0].Get(builder.IDKey).Int64(), nil
 }
 
-func (e *DB) Replace(table string, data interface{}) (lastId int64, err error) {
+func (e *DB) Replace(table string, data interface{}, options ...string) (lastId int64, err error) {
 	cols, args, err := parseMap(ztype.ToMap(data), nil)
 	if err != nil {
 		return 0, err
 	}
-	return e.insertData(builder.Replace(table), cols, args)
+	return e.insertData(builder.Replace(table), cols, args, options...)
 }
 
-func (e *DB) BatchReplace(table string, data interface{}) (lastId []int64, err error) {
+func (e *DB) BatchReplace(
+	table string,
+	data interface{},
+	options ...string,
+) (lastId []int64, err error) {
 	cols, args, err := parseMaps2(ztype.ToMaps(data))
 	if err != nil {
 		return []int64{0}, err
 	}
-	id, err := e.insertData(builder.Replace(table), cols, args)
+
+	datas := splitMaps(args)
+	var id int64
+	// TODO 优化：开启事务
+	for i := range datas {
+		id, err = e.insertData(builder.Replace(table), cols, datas[i], options...)
+		if err != nil {
+			return []int64{0}, err
+		}
+	}
+
 	return e.batchIds(args, id, err)
 }
 
@@ -121,7 +157,6 @@ func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (zty
 		}
 		return fn(sb)
 	})
-
 	if err != nil {
 		return ztype.Map{}, err
 	}
@@ -135,11 +170,18 @@ type Pages struct {
 	Curpage uint `json:"curpage"`
 }
 
-func (e *DB) Pages(table string, page, pagesize int, fn ...func(b *builder.SelectBuilder) error) (ztype.Maps, Pages, error) {
+func (e *DB) Pages(
+	table string,
+	page, pagesize int,
+	fn ...func(b *builder.SelectBuilder) error,
+) (ztype.Maps, Pages, error) {
 	var b *builder.SelectBuilder
+	if pagesize < 0 {
+		pagesize = 1
+	}
 	resultMap, err := e.Find(table, func(bui *builder.SelectBuilder) error {
-		bui.Limit(pagesize)
-		if page > 0 {
+		if page > 0 && pagesize > 0 {
+			bui.Limit(pagesize)
 			bui.Offset((page - 1) * pagesize)
 		}
 
@@ -196,7 +238,13 @@ func (e *DB) Delete(table string, fn func(b *builder.DeleteBuilder) error) (int6
 	return parseExec(e, b)
 }
 
-func (e *DB) update(table string, cols []string, args [][]interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
+func (e *DB) update(
+	table string,
+	cols []string,
+	args [][]interface{},
+	fn func(b *builder.UpdateBuilder) error,
+	options ...string,
+) (int64, error) {
 	b := builder.Update(table).SetDriver(e.driver)
 	if fn == nil {
 		return 0, errors.New("update the condition cannot be empty")
@@ -205,7 +253,9 @@ func (e *DB) update(table string, cols []string, args [][]interface{}, fn func(b
 	// if len(cols) == 0 {
 	// 	return 0, errors.New("update the data cannot be empty")
 	// }
-
+	if len(options) > 0 {
+		b.Option(options...)
+	}
 	clen := len(cols)
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -222,7 +272,11 @@ func (e *DB) update(table string, cols []string, args [][]interface{}, fn func(b
 	return parseExec(e, b)
 }
 
-func (e *DB) Update(table string, data interface{}, fn func(b *builder.UpdateBuilder) error) (int64, error) {
+func (e *DB) Update(
+	table string,
+	data interface{},
+	fn func(b *builder.UpdateBuilder) error,
+) (int64, error) {
 	cols, args, err := parseMap(ztype.ToMap(data), nil)
 	if err != nil {
 		return 0, err

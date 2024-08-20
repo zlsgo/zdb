@@ -11,19 +11,19 @@ import (
 )
 
 type TableBuilder struct {
-	table string
 	args  *BuildCond
+	table string
 }
 
 type (
 	// CreateTableBuilder is a builder to build CREATE TABLE
 	CreateTableBuilder struct {
 		*TableBuilder
-		ifNotExists bool
 		verb        string
 		defines     [][]string
 		options     [][]string
 		columns     []*schema.Field
+		ifNotExists bool
 	}
 )
 
@@ -202,8 +202,8 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}, err erro
 		buf.WriteRune(' ')
 
 		opts := make([]string, 0, len(b.options))
-		for _, opt := range b.options {
-			opts = append(opts, strings.Join(opt, " "))
+		for i := range b.options {
+			opts = append(opts, strings.Join(b.options[i], " "))
 		}
 		buf.WriteString(strings.Join(opts, ", "))
 	}
