@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"sync"
+	"time"
 
 	"github.com/sohaha/zlsgo/zstring"
 	"github.com/sohaha/zlsgo/zutil"
@@ -68,7 +69,10 @@ func (e *DB) getSession(s *Session, master bool, ctx ...context.Context) (*Sessi
 
 func (s *Session) execContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	if Debug.Load() {
-		log.Debug("SQL:", query, args)
+		now := time.Now()
+		defer func() {
+			log.Debugf("SQL [%s]: %s %v\n", time.Since(now), query, args)
+		}()
 	}
 
 	var (
@@ -89,7 +93,10 @@ func (s *Session) execContext(ctx context.Context, query string, args ...interfa
 
 func (s *Session) queryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if Debug.Load() {
-		log.Debug("SQL:", query, args)
+		now := time.Now()
+		defer func() {
+			log.Debugf("SQL [%s]: %s %v\n", time.Since(now), query, args)
+		}()
 	}
 
 	stmt, err := s.config.db.PrepareContext(ctx, query)

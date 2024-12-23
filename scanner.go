@@ -84,11 +84,11 @@ func resolveDataFromRows(rows IfeRows) (ztype.Maps, int, error) {
 		entry := make(ztype.Map, length)
 		for i, col := range columns {
 			val := values[i]
-			b, ok := val.([]byte)
-			if ok {
-				entry[col] = zstring.Bytes2String(b)
-			} else {
-				entry[col] = val
+			switch v := val.(type) {
+			case []byte:
+				entry[col] = zstring.Bytes2String(v)
+			default:
+				entry[col] = v
 			}
 		}
 		result = append(result, entry)
