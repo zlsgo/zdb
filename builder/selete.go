@@ -179,6 +179,9 @@ func (b *SelectBuilder) ForShare() *SelectBuilder {
 
 // As returns an AS expression
 func (b *SelectBuilder) As(name, alias string) string {
+	if alias == "" {
+		return name
+	}
 	return name + " AS " + alias
 }
 
