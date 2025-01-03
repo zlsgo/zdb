@@ -103,9 +103,9 @@ func (e *DB) insertData(
 			return 0, err
 		}
 
-		if i, _ := result.RowsAffected(); i == 0 {
-			return 0, errInsertEmpty
-		}
+		// if i, _ := result.RowsAffected(); i == 0 {
+		// 	return 0, errInsertEmpty
+		// }
 
 		return result.LastInsertId()
 	}
