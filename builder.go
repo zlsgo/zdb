@@ -4,10 +4,13 @@ import (
 	"errors"
 	"math"
 
+	"github.com/sohaha/zlsgo/zarray"
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/builder"
 	"github.com/zlsgo/zdb/driver"
 )
+
+var MaxBatch = 1000
 
 func (e *DB) Insert(table string, data interface{}, options ...string) (lastId int64, err error) {
 	cols, args, err := parseMap(ztype.ToMap(data), nil)
@@ -27,7 +30,7 @@ func (e *DB) BatchInsert(
 		return []int64{0}, err
 	}
 
-	datas := splitMaps(args)
+	datas := zarray.Chunk(args, MaxBatch)
 	var id int64
 	// TODO 优化：开启事务
 	for i := range datas {
@@ -38,20 +41,6 @@ func (e *DB) BatchInsert(
 	}
 
 	return e.batchIds(args, id, err)
-}
-
-var MaxBatch = 1000
-
-func splitMaps(maps [][]interface{}) [][][]interface{} {
-	var result [][][]interface{}
-	for i := 0; i < len(maps); i += MaxBatch {
-		end := i + MaxBatch
-		if end > len(maps) {
-			end = len(maps)
-		}
-		result = append(result, maps[i:end])
-	}
-	return result
 }
 
 func (e *DB) batchIds(args [][]interface{}, id int64, err error) ([]int64, error) {
@@ -136,7 +125,7 @@ func (e *DB) BatchReplace(
 		return []int64{0}, err
 	}
 
-	datas := splitMaps(args)
+	datas := zarray.Chunk(args, MaxBatch)
 	var id int64
 	// TODO 优化：开启事务
 	for i := range datas {
