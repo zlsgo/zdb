@@ -87,7 +87,12 @@ func (b *SelectBuilder) From(table ...string) *SelectBuilder {
 // Select sets columns in SELECT
 func (b *SelectBuilder) Select(cols ...string) *SelectBuilder {
 	b.selectCols = b.selectCols[:0]
+
 	for i := range cols {
+		if cols[i][0] == '(' {
+			b.selectCols = append(b.selectCols, cols[i])
+			continue
+		}
 		b.selectCols = append(b.selectCols, strings.Split(cols[i], ",")...)
 	}
 
