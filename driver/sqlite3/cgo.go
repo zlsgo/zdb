@@ -43,7 +43,11 @@ func (c *Config) GetDsn() string {
 		if f == "" {
 			f = "zlsgo.db"
 		}
-		c.dsn = "file:" + zfile.RealPath(f) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "?").(string) + "&" + c.Parameters
+		parameters := c.Parameters
+		if parameters == ""{
+			parameters = "_txlock=immediate"
+		}
+		c.dsn = "file:" + zfile.RealPath(f) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "?").(string) + "&" + 
 	}
 
 	return c.dsn
