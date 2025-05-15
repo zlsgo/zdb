@@ -8,6 +8,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sohaha/zlsgo/zlog"
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/zlsgo/zdb/driver"
 
 	"github.com/sohaha/zlsgo/zstring"
@@ -81,7 +82,7 @@ func (c *Config) GetDsn() string {
 	}
 
 	c.dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s%s%s",
-		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 3306, c.Port), c.DBName, charset, loc, zutil.IfVal(c.Parameters == "", "parseTime=true", c.Parameters))
+		c.User, c.Password, ztype.ToString(zutil.IfVal(c.Host == "", "127.0.0.1", c.Host)), ztype.ToInt(zutil.IfVal(c.Port == 0, 3306, c.Port)), c.DBName, charset, loc, ztype.ToString(zutil.IfVal(c.Parameters == "", "parseTime=true", c.Parameters)))
 
 	return c.dsn
 }
@@ -98,8 +99,7 @@ func init() {
 	_ = mysql.SetLogger(&log{})
 }
 
-type log struct {
-}
+type log struct{}
 
 func (l log) Print(v ...interface{}) {
 	zlog.Debug(append([]interface{}{"[mysql] "}, v...)...)

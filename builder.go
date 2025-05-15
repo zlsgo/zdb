@@ -2,7 +2,10 @@ package zdb
 
 import (
 	"errors"
+	"fmt"
 	"math"
+	"runtime"
+	"sync"
 
 	"github.com/sohaha/zlsgo/zarray"
 	"github.com/sohaha/zlsgo/ztype"
@@ -10,7 +13,17 @@ import (
 	"github.com/zlsgo/zdb/driver"
 )
 
-var MaxBatch = 1000
+// BatchConfig batch config
+type BatchConfig struct {
+	MaxBatch int // max batch size
+	Workers  int // worker count
+}
+
+// DefaultBatchConfig default batch config
+var DefaultBatchConfig = BatchConfig{
+	MaxBatch: 1000,
+	Workers:  5,
+}
 
 func (e *DB) Insert(table string, data interface{}, options ...string) (lastId int64, err error) {
 	cols, args, err := parseMap(ztype.ToMap(data), nil)
@@ -25,22 +38,83 @@ func (e *DB) BatchInsert(
 	data interface{},
 	options ...string,
 ) (lastId []int64, err error) {
+	return e.BatchInsertWithConfig(table, data, DefaultBatchConfig, options...)
+}
+
+// BatchInsertWithConfig support custom config
+func (e *DB) BatchInsertWithConfig(
+	table string,
+	data interface{},
+	config BatchConfig,
+	options ...string,
+) (lastId []int64, err error) {
 	cols, args, err := parseMaps2(ztype.ToMaps(data))
 	if err != nil {
 		return []int64{0}, err
 	}
 
-	datas := zarray.Chunk(args, MaxBatch)
-	var id int64
-	// TODO 优化：开启事务
-	for i := range datas {
-		id, err = e.insertData(builder.Insert(table), cols, datas[i], options...)
+	datas := zarray.Chunk(args, config.MaxBatch)
+
+	if len(datas) <= 1 {
+		var id int64
+		id, err = e.insertData(builder.Insert(table), cols, args, options...)
 		if err != nil {
 			return []int64{0}, err
 		}
+		return e.batchIds(args, id, err)
 	}
 
-	return e.batchIds(args, id, err)
+	var finalId int64
+	var mu sync.Mutex
+	errChan := make(chan error, len(datas))
+
+	workers := config.Workers
+	if workers <= 0 {
+		workers = runtime.NumCPU()
+	}
+
+	pool := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+
+	err = e.Transaction(func(tx *DB) error {
+		for i := range datas {
+			pool <- struct{}{}
+			wg.Add(1)
+
+			go func(chunk [][]interface{}, index int) {
+				defer func() {
+					<-pool
+					wg.Done()
+				}()
+
+				id, err := tx.insertData(builder.Insert(table), cols, chunk, options...)
+				if err != nil {
+					errChan <- fmt.Errorf("batch %d: %w", index, err)
+					return
+				}
+
+				mu.Lock()
+				if index == len(datas)-1 {
+					finalId = id
+				}
+				mu.Unlock()
+			}(datas[i], i)
+		}
+
+		wg.Wait()
+		close(errChan)
+
+		for err := range errChan {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return []int64{0}, err
+	}
+
+	return e.batchIds(args, finalId, err)
 }
 
 func (e *DB) batchIds(args [][]interface{}, id int64, err error) ([]int64, error) {
@@ -125,17 +199,37 @@ func (e *DB) BatchReplace(
 		return []int64{0}, err
 	}
 
-	datas := zarray.Chunk(args, MaxBatch)
-	var id int64
-	// TODO 优化：开启事务
-	for i := range datas {
-		id, err = e.insertData(builder.Replace(table), cols, datas[i], options...)
+	datas := zarray.Chunk(args, DefaultBatchConfig.MaxBatch)
+
+	if len(datas) <= 1 {
+		var id int64
+		id, err = e.insertData(builder.Replace(table), cols, args, options...)
 		if err != nil {
 			return []int64{0}, err
 		}
+		return e.batchIds(args, id, err)
 	}
 
-	return e.batchIds(args, id, err)
+	var id int64
+	var finalId int64
+
+	err = e.Transaction(func(tx *DB) error {
+		for i := range datas {
+			id, err = tx.insertData(builder.Replace(table), cols, datas[i], options...)
+			if err != nil {
+				return err
+			}
+			if i == len(datas)-1 {
+				finalId = id
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return []int64{0}, err
+	}
+
+	return e.batchIds(args, finalId, err)
 }
 
 func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (ztype.Map, error) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	_ "github.com/lib/pq"
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 )
@@ -51,7 +52,7 @@ func (c *Config) SetDsn(dsn string) {
 func (c *Config) GetDsn() string {
 	if c.dsn == "" {
 		c.dsn = fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s",
-			zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 5432, c.Port), c.User, c.DBName, c.Password, zutil.IfVal(c.SSLMode == "", "disable", c.SSLMode))
+			ztype.ToString(zutil.IfVal(c.Host == "", "127.0.0.1", c.Host)), ztype.ToInt(zutil.IfVal(c.Port == 0, 5432, c.Port)), c.User, c.DBName, c.Password, ztype.ToString(zutil.IfVal(c.SSLMode == "", "disable", c.SSLMode)))
 	}
 
 	return c.dsn

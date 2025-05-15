@@ -8,6 +8,7 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/sohaha/zlsgo/zfile"
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 )
@@ -44,10 +45,10 @@ func (c *Config) GetDsn() string {
 			f = "zlsgo.db"
 		}
 		parameters := c.Parameters
-		if parameters == ""{
+		if parameters == "" {
 			parameters = "_txlock=immediate"
 		}
-		c.dsn = "file:" + zfile.RealPath(f) + zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "?").(string) + "&" + 
+		c.dsn = "file:" + zfile.RealPath(f) + ztype.ToString(zutil.IfVal(c.Memory, "?cache=shared&mode=memory", "?")) + "&" + parameters
 	}
 
 	return c.dsn

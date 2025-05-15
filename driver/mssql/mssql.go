@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	_ "github.com/denisenkom/go-mssqldb"
+	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 )
@@ -53,7 +54,7 @@ func (c *Config) GetDsn() string {
 		return c.dsn
 	}
 	c.dsn = fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s?%s",
-		c.User, c.Password, zutil.IfVal(c.Host == "", "127.0.0.1", c.Host), zutil.IfVal(c.Port == 0, 1433, c.Port), c.DBName, c.Parameters)
+		c.User, c.Password, ztype.ToString(zutil.IfVal(c.Host == "", "127.0.0.1", c.Host)), ztype.ToInt(zutil.IfVal(c.Port == 0, 1433, c.Port)), c.DBName, c.Parameters)
 	return c.dsn
 }
 
