@@ -37,6 +37,7 @@ const (
 	PostgreSQL
 	SQLite
 	MsSQL
+	ClickHouse
 )
 
 // String returns the name of driver
@@ -50,6 +51,8 @@ func (f Typ) String() string {
 		return "SQLite"
 	case MsSQL:
 		return "MsSQL"
+	case ClickHouse:
+		return "ClickHouse"
 	}
 
 	return "<invalid>"
@@ -85,7 +88,7 @@ func (f Typ) quote(col string) string {
 	switch f {
 	case MySQL:
 		return "`" + col + "`"
-	case PostgreSQL, MsSQL, SQLite:
+	case PostgreSQL, MsSQL, SQLite, ClickHouse:
 		return `"` + col + `"`
 	}
 
