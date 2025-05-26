@@ -213,6 +213,12 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}, err erro
 	sql, values = b.args.Compile(buf.String())
 
 	if b.args.driver != nil && b.args.driver.Value() == driver.Doris {
+		defer func() {
+			if r := recover(); r != nil {
+				// Log the error or handle it appropriately
+				err = fmt.Errorf("failed to modify SQL for Doris driver: %v", r)
+			}
+		}()
 		// 检查驱动是否支持 ModifyCreateTableSQL 方法
 		driverType := zreflect.TypeOf(b.args.driver)
 		m, ok := driverType.MethodByName("ModifyCreateTableSQL")
@@ -220,7 +226,9 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}, err erro
 			driverValue := zreflect.ValueOf(b.args.driver)
 			sqlValue := zreflect.ValueOf(sql)
 			r := m.Func.Call([]reflect.Value{driverValue, sqlValue})
-			sql = r[0].String()
+			if len(r) > 0 && r[0].IsValid() {
+				sql = r[0].String()
+			}
 		}
 	}
 	return
