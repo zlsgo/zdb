@@ -38,6 +38,7 @@ const (
 	SQLite
 	MsSQL
 	ClickHouse
+	Doris
 )
 
 // String returns the name of driver
@@ -53,6 +54,8 @@ func (f Typ) String() string {
 		return "MsSQL"
 	case ClickHouse:
 		return "ClickHouse"
+	case Doris:
+		return "Doris"
 	}
 
 	return "<invalid>"

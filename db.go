@@ -91,13 +91,22 @@ func (e *DB) toDialect(c driver.IfeConfig) driver.Dialect {
 	return e.driver
 }
 
-
-func (e *DB) GetSQLDB() (*sql.DB,error) {
+func (e *DB) GetSQLDB() (*sql.DB, error) {
 	db, err := e.getSession(nil, true)
 	if err != nil {
 		return nil, err
 	}
 	defer e.putSessionPool(db, false)
 
-	return db.config.db,nil
+	return db.config.db, nil
+}
+
+func (e *DB) Close() error {
+	for i := range e.pools {
+		err := e.pools[i].db.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

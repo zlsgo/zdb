@@ -11,7 +11,6 @@ import (
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/sohaha/zlsgo/zlog"
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -22,7 +21,6 @@ var (
 	_ driver.Dialect   = &Config{}
 )
 
-// Config ClickHouse configuration
 type Config struct {
 	db         *sql.DB
 	dsn        string
@@ -34,16 +32,31 @@ type Config struct {
 	Parameters string
 	driver.Typ
 	Port int
-	// ClickHouse特有配置
+
 	Timeout          time.Duration
 	ReadTimeout      time.Duration
 	WriteTimeout     time.Duration
+	ConnTimeout      time.Duration
 	AltHosts         []string
-	Debug            bool
-	UseSSL           bool
-	SkipVerify       bool
-	ClusterName      string
 	ConnOpenStrategy string
+
+	UseSSL     bool
+	SkipVerify bool
+	CertPath   string
+	KeyPath    string
+	CAPath     string
+
+	ClusterName string
+	Distributed bool
+
+	Debug        bool
+	TraceLogging bool
+
+	BlockBufferSize  int
+	MaxOpenConns     int
+	MaxIdleConns     int
+	ConnMaxLifetime  time.Duration
+	MaxExecutionTime time.Duration
 }
 
 func (c *Config) DB() *sql.DB {
@@ -55,6 +68,19 @@ func (c *Config) MustDB() (*sql.DB, error) {
 	var err error
 	if c.db == nil {
 		c.db, err = sql.Open(c.GetDriver(), c.GetDsn())
+		if err != nil {
+			return nil, err
+		}
+
+		if c.MaxOpenConns > 0 {
+			c.db.SetMaxOpenConns(c.MaxOpenConns)
+		}
+		if c.MaxIdleConns > 0 {
+			c.db.SetMaxIdleConns(c.MaxIdleConns)
+		}
+		if c.ConnMaxLifetime > 0 {
+			c.db.SetConnMaxLifetime(c.ConnMaxLifetime)
+		}
 	}
 	return c.db, err
 }
@@ -84,17 +110,34 @@ func (c *Config) GetDsn() string {
 	if c.Debug {
 		query.Add("debug", "true")
 	}
+	if c.TraceLogging {
+		query.Add("trace_logging", "true")
+	}
 
 	if c.Timeout > 0 {
 		query.Add("timeout", c.Timeout.String())
 	}
-
 	if c.ReadTimeout > 0 {
 		query.Add("read_timeout", c.ReadTimeout.String())
 	}
-
 	if c.WriteTimeout > 0 {
 		query.Add("write_timeout", c.WriteTimeout.String())
+	}
+	if c.ConnTimeout > 0 {
+		query.Add("connection_timeout", c.ConnTimeout.String())
+	}
+	if c.MaxExecutionTime > 0 {
+		query.Add("max_execution_time", c.MaxExecutionTime.String())
+	}
+
+	if c.MaxOpenConns > 0 {
+		query.Add("max_open_conns", strconv.Itoa(c.MaxOpenConns))
+	}
+	if c.MaxIdleConns > 0 {
+		query.Add("max_idle_conns", strconv.Itoa(c.MaxIdleConns))
+	}
+	if c.ConnMaxLifetime > 0 {
+		query.Add("conn_max_lifetime", c.ConnMaxLifetime.String())
 	}
 
 	if len(c.AltHosts) > 0 {
@@ -102,20 +145,34 @@ func (c *Config) GetDsn() string {
 			query.Add("alt_hosts["+strconv.Itoa(i)+"]", host)
 		}
 	}
+	if c.ConnOpenStrategy != "" {
+		query.Add("connection_open_strategy", c.ConnOpenStrategy)
+	}
+	if c.ClusterName != "" {
+		query.Add("cluster", c.ClusterName)
+	}
+	if c.Distributed {
+		query.Add("distributed", "true")
+	}
 
 	if c.UseSSL {
 		query.Add("secure", "true")
 		if c.SkipVerify {
 			query.Add("skip_verify", "true")
 		}
+		if c.CertPath != "" {
+			query.Add("tls_cert", c.CertPath)
+		}
+		if c.KeyPath != "" {
+			query.Add("tls_key", c.KeyPath)
+		}
+		if c.CAPath != "" {
+			query.Add("tls_ca", c.CAPath)
+		}
 	}
 
-	if c.ClusterName != "" {
-		query.Add("cluster", c.ClusterName)
-	}
-
-	if c.ConnOpenStrategy != "" {
-		query.Add("connection_open_strategy", c.ConnOpenStrategy)
+	if c.BlockBufferSize > 0 {
+		query.Add("block_buffer_size", strconv.Itoa(c.BlockBufferSize))
 	}
 
 	if c.Parameters != "" {
@@ -134,16 +191,4 @@ func (c *Config) GetDriver() string {
 
 func (c *Config) Value() driver.Typ {
 	return driver.ClickHouse
-}
-
-func init() {
-	// 配置日志
-	zlog.Debug("[clickhouse] Driver initialized")
-}
-
-// 日志结构体
-type log struct{}
-
-func (l log) Print(v ...interface{}) {
-	zlog.Debug(append([]interface{}{"[clickhouse] "}, v...)...)
 }

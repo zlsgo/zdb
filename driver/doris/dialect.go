@@ -1,7 +1,7 @@
-//go:build clickhouse
-// +build clickhouse
+//go:build doris
+// +build doris
 
-package clickhouse
+package doris
 
 import (
 	"fmt"
@@ -22,6 +22,14 @@ func (c *Config) databaseName() string {
 	return c.DBName
 }
 
+func (c *Config) BuildCreateTableSQL(table string, columns []string) string {
+	sql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n  %s\n)",
+		c.Quote(table), strings.Join(columns, ",\n  "))
+
+	// 添加 Doris 特有的表选项
+	return sql + c.GetTableOptions()
+}
+
 func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 	t := zstring.Buffer()
 
@@ -32,7 +40,7 @@ func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 
 	switch f.DataType {
 	case schema.Bool:
-		t.WriteString("UInt8")
+		t.WriteString("BOOLEAN")
 	case schema.Int, schema.Uint:
 		t.WriteString(c.getSchemaNumberType(f))
 	case schema.Float:
@@ -40,34 +48,30 @@ func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 	case schema.String:
 		t.WriteString(c.getSchemaStringType(f))
 	case schema.Text:
-		t.WriteString("String")
+		t.WriteString("STRING")
 	case schema.Time:
 		t.WriteString(c.getSchemaTimeType(f))
 	case schema.Bytes:
-		t.WriteString("String")
+		t.WriteString("STRING")
 	case schema.JSON:
-		t.WriteString("String")
+		t.WriteString("STRING")
 	default:
 
-		if strings.HasPrefix(string(f.DataType), "Array(") {
+		if strings.HasPrefix(string(f.DataType), "ARRAY<") {
 			t.WriteString(string(f.DataType))
-		} else if strings.HasPrefix(string(f.DataType), "Map(") {
-			t.WriteString(string(f.DataType))
-		} else if strings.HasPrefix(string(f.DataType), "Tuple(") {
-			t.WriteString(string(f.DataType))
-		} else if strings.HasPrefix(string(f.DataType), "Enum") {
+		} else if strings.HasPrefix(string(f.DataType), "MAP<") {
 			t.WriteString(string(f.DataType))
 		} else {
-
 			t.WriteString(string(f.DataType))
 		}
 	}
 
 	if !(len(only) > 0 && only[0]) {
+
 		if !f.NotNull {
-			typeStr := t.String()
-			t.Reset()
-			t.WriteString("Nullable(" + typeStr + ")")
+			t.WriteString(" NULL")
+		} else {
+			t.WriteString(" NOT NULL")
 		}
 
 		if f.Comment != "" {
@@ -81,75 +85,75 @@ func (c *Config) DataTypeOf(f *schema.Field, only ...bool) string {
 }
 
 func (c *Config) getSchemaNumberType(field *schema.Field) string {
+	isPrimaryOrDistributionKey := field.PrimaryKey
+
+	hasColocate := false
+	if c.CustomProperties != nil {
+		_, hasColocate = c.CustomProperties["colocate_with"]
+	}
+
+	if isPrimaryOrDistributionKey && hasColocate {
+		if field.DataType == schema.Uint {
+			return "BIGINT UNSIGNED"
+		}
+		return "BIGINT"
+	}
+
 	if field.DataType == schema.Uint {
 		switch {
 		case field.Size <= 8:
-			return "UInt8"
+			return "TINYINT UNSIGNED"
 		case field.Size <= 16:
-			return "UInt16"
+			return "SMALLINT UNSIGNED"
 		case field.Size <= 32:
-			return "UInt32"
+			return "INT UNSIGNED"
 		default:
-			return "UInt64"
+			return "BIGINT UNSIGNED"
 		}
 	} else {
 		switch {
 		case field.Size <= 8:
-			return "Int8"
+			return "TINYINT"
 		case field.Size <= 16:
-			return "Int16"
+			return "SMALLINT"
 		case field.Size <= 32:
-			return "Int32"
+			return "INT"
 		default:
-			return "Int64"
+			return "BIGINT"
 		}
 	}
 }
 
 func (c *Config) getSchemaFloatType(field *schema.Field) string {
 	if field.Precision > 0 {
-		return fmt.Sprintf("Decimal(%d, %d)", field.Precision, field.Scale)
+		return fmt.Sprintf("DECIMAL(%d, %d)", field.Precision, field.Scale)
 	}
 
 	if field.Size <= 32 {
-		return "Float32"
+		return "FLOAT"
 	}
 
-	return "Float64"
+	return "DOUBLE"
 }
 
 func (c *Config) getSchemaStringType(field *schema.Field) string {
-	if field.Size > 0 {
-		return fmt.Sprintf("FixedString(%d)", field.Size)
+	if field.Size > 0 && field.Size <= 65533 {
+		return fmt.Sprintf("VARCHAR(%d)", field.Size)
 	}
 
-	return "String"
+	return "STRING"
 }
 
 func (c *Config) getSchemaTimeType(field *schema.Field) string {
-
 	if strings.Contains(field.Comment, "date_only") || strings.Contains(field.Comment, "date only") {
-		return "Date"
-	} else if strings.Contains(field.Comment, "date32") {
-		return "Date32"
+		return "DATE"
 	}
-	
 
-	if field.Precision > 0 {
-	
-		precision := field.Precision
-		if precision > 9 {
-			precision = 9
-		}
-		return fmt.Sprintf("DateTime64(%d)", precision)
-	}
-	
-
-	return "DateTime"
+	return "DATETIME"
 }
 
 func (c *Config) HasTable(table string) (sql string, values []interface{}, process func(result ztype.Maps) bool) {
-	return `SELECT count(*) AS count FROM system.tables WHERE database = ? AND name = ?`,
+	return `SELECT count(*) AS count FROM information_schema.tables WHERE table_schema = ? AND table_name = ?`,
 		[]interface{}{c.databaseName(), table},
 		func(data ztype.Maps) bool {
 			if len(data) > 0 {
@@ -160,18 +164,23 @@ func (c *Config) HasTable(table string) (sql string, values []interface{}, proce
 }
 
 func (c *Config) GetColumn(table string) (sql string, values []interface{}, process func(result ztype.Maps) ztype.Map) {
-	return `SELECT name, type, default_expression, is_in_primary_key 
-			FROM system.columns 
-			WHERE database = ? AND table = ?`,
+	return `SELECT column_name, column_type, column_default, is_nullable, column_comment 
+			FROM information_schema.columns 
+			WHERE table_schema = ? AND table_name = ?`,
 		[]interface{}{c.databaseName(), table},
 		func(data ztype.Maps) ztype.Map {
 			columns := make(ztype.Map, len(data))
 			data.ForEach(func(i int, val ztype.Map) bool {
-				name := ztype.ToString(val["name"])
+				name := ztype.ToString(val["column_name"])
 				if name == "" {
 					return true
 				}
-				columns[name] = ztype.Map{"type": ztype.ToString(val["type"])}
+				columns[name] = ztype.Map{
+					"type":    ztype.ToString(val["column_type"]),
+					"default": ztype.ToString(val["column_default"]),
+					"null":    ztype.ToString(val["is_nullable"]) == "YES",
+					"comment": ztype.ToString(val["column_comment"]),
+				}
 				return true
 			})
 			return columns
@@ -184,57 +193,71 @@ func (c *Config) RenameColumn(table, oldName, newName string) (sql string, value
 }
 
 func (c *Config) HasIndex(table, name string) (sql string, values []interface{}, process func(ztype.Maps) bool) {
-	return `SELECT count(*) AS count FROM system.data_skipping_indices 
-			WHERE database = ? AND table = ? AND name = ?`,
-		[]interface{}{c.databaseName(), table, name},
+	// Doris 使用 SHOW INDEX 命令查询索引
+	return `SHOW INDEX FROM ` + c.Quote(table) + ` WHERE Key_name = ?`,
+		[]interface{}{name},
 		func(data ztype.Maps) bool {
-			if len(data) > 0 {
-				return ztype.ToInt64(data[0]["count"]) > 0
-			}
-			return false
+			return len(data) > 0
 		}
 }
 
 func (c *Config) RenameIndex(table, oldName, newName string) (sql string, values []interface{}) {
-	// ClickHouse不支持直接重命名索引
+	// Doris 不支持直接重命名索引，返回空实现
 	return "", []interface{}{}
 }
 
 func (c *Config) CreateIndex(table, name string, columns []string, indexType string) (sql string, values []interface{}) {
-	// ClickHouse的索引创建方式与传统数据库不同
-	// ClickHouse支持多种类型的索引：
-	// 1. 主键索引 - 由ORDER BY定义
-	// 2. 数据跳过索引 (data skipping indices) - 如minmax, set, bloom_filter等
-	// 3. 次级索引 - 由物化视图提供
+	// Doris 的索引创建方式与传统数据库不同，主要通过建表
+	var idx string
 
-	cols := strings.Join(c.QuoteCols(columns), ", ")
-
-	// 如果没有指定索引类型，默认使用minmax
-	if indexType == "" {
-		indexType = "minmax"
-	}
-
-	// 根据索引类型生成不同的SQL
-	switch strings.ToLower(indexType) {
-	case "primary", "primarykey", "primary_key":
-		// 主键索引在ClickHouse中通过表创建时的ORDER BY定义
-		// 不支持后期添加主键索引
-		return "", []interface{}{}
-	case "minmax", "set", "bloom_filter", "ngrambf_v1", "tokenbf_v1":
-		// 数据跳过索引
-		return fmt.Sprintf("ALTER TABLE %s ADD INDEX %s (%s) TYPE %s GRANULARITY 1",
-			c.Quote(table), c.Quote(name), cols, indexType), []interface{}{}
+	switch strings.ToUpper(indexType) {
+	case "UNIQUE":
+		idx = "UNIQUE KEY"
+	case "FULLTEXT":
+		idx = "FULLTEXT KEY"
+	case "SPATIAL":
+		idx = "SPATIAL KEY"
 	default:
-		// 其他类型的索引
-		return fmt.Sprintf("ALTER TABLE %s ADD INDEX %s (%s) TYPE %s GRANULARITY 1",
-			c.Quote(table), c.Quote(name), cols, indexType), []interface{}{}
+		idx = "KEY"
 	}
+
+	quotedColumns := make([]string, len(columns))
+	for i, column := range columns {
+		quotedColumns[i] = c.Quote(column)
+	}
+
+	return fmt.Sprintf("ALTER TABLE %s ADD %s %s (%s)",
+		c.Quote(table), idx, c.Quote(name), strings.Join(quotedColumns, ", ")), []interface{}{}
 }
 
 func (c *Config) Quote(name string) string {
-	return c.Value().Quote(name)
+	if name == "*" || (len(name) > 0 && name[0] == '(') {
+		return name
+	}
+
+	sl := strings.SplitN(name, " ", 2)
+	if strings.IndexRune(sl[0], '.') > 0 {
+		s := strings.Split(sl[0], ".")
+		for i := range s {
+			if s[i] == "*" {
+				continue
+			}
+			s[i] = "`" + s[i] + "`"
+		}
+		sl[0] = strings.Join(s, ".")
+	} else {
+		sl[0] = "`" + sl[0] + "`"
+	}
+
+	return strings.Join(sl, " ")
 }
 
 func (c *Config) QuoteCols(cols []string) []string {
-	return c.Value().QuoteCols(cols)
+	nm := make([]string, 0, len(cols))
+
+	for i := range cols {
+		nm = append(nm, c.Quote(cols[i]))
+	}
+
+	return nm
 }

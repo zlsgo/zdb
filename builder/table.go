@@ -2,8 +2,10 @@ package builder
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
+	"github.com/sohaha/zlsgo/zreflect"
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -209,6 +211,16 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}, err erro
 	}
 
 	sql, values = b.args.Compile(buf.String())
+
+	// 检查驱动是否支持 ModifyCreateTableSQL 方法
+	driverType := zreflect.TypeOf(b.args.driver)
+	m, ok := driverType.MethodByName("ModifyCreateTableSQL")
+	if ok {
+		driverValue := zreflect.ValueOf(b.args.driver)
+		sqlValue := zreflect.ValueOf(sql)
+		r := m.Func.Call([]reflect.Value{driverValue, sqlValue})
+		sql = r[0].String()
+	}
 	return
 }
 
