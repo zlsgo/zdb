@@ -102,11 +102,11 @@ func (e *DB) GetSQLDB() (*sql.DB, error) {
 }
 
 func (e *DB) Close() error {
+	var firstErr error
 	for i := range e.pools {
-		err := e.pools[i].db.Close()
-		if err != nil {
-			return err
+		if err := e.pools[i].db.Close(); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
-	return nil
+	return firstErr
 }

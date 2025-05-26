@@ -89,7 +89,7 @@ func (f Typ) quote(col string) string {
 		return col
 	}
 	switch f {
-	case MySQL:
+	case MySQL, Doris:
 		return "`" + col + "`"
 	case PostgreSQL, MsSQL, SQLite, ClickHouse:
 		return `"` + col + `"`
