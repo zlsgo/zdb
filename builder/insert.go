@@ -1,9 +1,6 @@
 package builder
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 )
@@ -86,34 +83,75 @@ func (b *InsertBuilder) Build() (sql string, values []interface{}, err error) {
 }
 
 func (b *InsertBuilder) build(blend bool) (sql string, args []interface{}) {
-	buf := zutil.GetBuff(256)
+	estimatedSize := 256
+	estimatedSize += len(b.table) * 2
+	if len(b.cols) > 0 {
+		estimatedSize += len(b.cols) * 10
+	}
+	if len(b.values) > 0 {
+		estimatedSize += len(b.values) * 20
+	}
+	if len(b.options) > 0 {
+		estimatedSize += len(b.options) * 15
+	}
+
+	buf := zutil.GetBuff(uint(estimatedSize))
 	defer zutil.PutBuff(buf)
+
+	driverValue := b.cond.driver.Value()
+
 	buf.WriteString(b.verb)
 	buf.WriteString(" INTO ")
-	buf.WriteString(b.cond.driver.Value().Quote(b.table))
+	buf.WriteString(driverValue.Quote(b.table))
+
 	if len(b.cols) > 0 {
 		buf.WriteString(" (")
-		buf.WriteString(strings.Join(b.cond.driver.Value().QuoteCols(b.cols), ", "))
+
+		quotedCols := driverValue.QuoteCols(b.cols)
+		for i, col := range quotedCols {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(col)
+		}
+
 		buf.WriteString(")")
 	}
 
 	buf.WriteString(" VALUES ")
-	values := make([]string, 0, len(b.values))
 
-	for _, v := range b.values {
-		values = append(values, fmt.Sprintf("(%v)", strings.Join(v, ", ")))
+	for i, v := range b.values {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+
+		buf.WriteRune('(')
+
+		for j, val := range v {
+			if j > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(val)
+		}
+
+		buf.WriteRune(')')
 	}
-
-	buf.WriteString(strings.Join(values, ", "))
 
 	if len(b.options) > 0 {
 		buf.WriteRune(' ')
 
-		opts := make([]string, 0, len(b.options))
-		for i := range b.options {
-			opts = append(opts, strings.Join(b.options[i], " "))
+		for i, opt := range b.options {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+
+			for j, o := range opt {
+				if j > 0 {
+					buf.WriteRune(' ')
+				}
+				buf.WriteString(o)
+			}
 		}
-		buf.WriteString(strings.Join(opts, ", "))
 	}
 
 	if blend {

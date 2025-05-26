@@ -3,7 +3,6 @@ package builder
 import (
 	"errors"
 	"strconv"
-	"strings"
 
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -84,20 +83,44 @@ func (b *DeleteBuilder) Build() (sql string, values []interface{}, err error) {
 }
 
 func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
-	buf := zutil.GetBuff(256)
+	estimatedSize := 256
+	estimatedSize += len(b.table) * 2
+	if len(b.whereExprs) > 0 {
+		estimatedSize += len(b.whereExprs) * 15
+	}
+	if len(b.orderByCols) > 0 {
+		estimatedSize += len(b.orderByCols) * 10
+	}
+
+	buf := zutil.GetBuff(uint(estimatedSize))
 	defer zutil.PutBuff(buf)
 
+	driverValue := b.Cond.driver.Value()
+
 	buf.WriteString("DELETE FROM ")
-	buf.WriteString(b.Cond.driver.Value().Quote(b.table))
+	buf.WriteString(driverValue.Quote(b.table))
 
 	if len(b.whereExprs) > 0 {
 		buf.WriteString(" WHERE ")
-		buf.WriteString(strings.Join(b.whereExprs, " AND "))
+
+		for i, expr := range b.whereExprs {
+			if i > 0 {
+				buf.WriteString(" AND ")
+			}
+			buf.WriteString(expr)
+		}
 	}
 
 	if len(b.orderByCols) > 0 {
 		buf.WriteString(" ORDER BY ")
-		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.orderByCols), ", "))
+
+		quotedCols := driverValue.QuoteCols(b.orderByCols)
+		for i, col := range quotedCols {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(col)
+		}
 
 		if b.order != "" {
 			buf.WriteRune(' ')

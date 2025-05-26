@@ -166,17 +166,39 @@ func (b *UpdateBuilder) buildStatement() []byte {
 }
 
 func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
-	buf := zutil.GetBuff(256)
+	estimatedSize := 256
+	estimatedSize += len(b.table) * 2
+	if len(b.assignments) > 0 {
+		estimatedSize += len(b.assignments) * 15
+	}
+	if len(b.whereExprs) > 0 {
+		estimatedSize += len(b.whereExprs) * 15
+	}
+	if len(b.orderByCols) > 0 {
+		estimatedSize += len(b.orderByCols) * 10
+	}
+	if len(b.options) > 0 {
+		estimatedSize += len(b.options) * 15
+	}
+
+	buf := zutil.GetBuff(uint(estimatedSize))
 	defer zutil.PutBuff(buf)
 
+	driverValue := b.Cond.driver.Value()
+
 	buf.WriteString("UPDATE ")
-	buf.WriteString(b.Cond.driver.Value().Quote(b.table))
+	buf.WriteString(driverValue.Quote(b.table))
 
 	buf.WriteString(" SET ")
-	buf.WriteString(strings.Join(b.assignments, ", "))
+	for i, assignment := range b.assignments {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(assignment)
+	}
 
 	if b.limit >= 0 {
-		if b.Cond.driver.Value() == driver.SQLite {
+		if driverValue == driver.SQLite {
 			buf.WriteString(" WHERE ")
 			buf.WriteString(IDKey)
 			buf.WriteString(" IN (")
@@ -184,7 +206,7 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 			buf.WriteString("SELECT ")
 			buf.WriteString(IDKey)
 			buf.WriteString(" FROM ")
-			buf.WriteString(b.Cond.driver.Value().Quote(b.table))
+			buf.WriteString(driverValue.Quote(b.table))
 			buf.Write(b.buildStatement())
 			buf.WriteString(" LIMIT ")
 			buf.WriteString(strconv.Itoa(b.limit))
@@ -199,14 +221,22 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 	} else {
 		buf.Write(b.buildStatement())
 	}
+
 	if len(b.options) > 0 {
 		buf.WriteRune(' ')
 
-		opts := make([]string, 0, len(b.options))
-		for i := range b.options {
-			opts = append(opts, strings.Join(b.options[i], " "))
+		for i, opt := range b.options {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+
+			for j, o := range opt {
+				if j > 0 {
+					buf.WriteRune(' ')
+				}
+				buf.WriteString(o)
+			}
 		}
-		buf.WriteString(strings.Join(opts, ", "))
 	}
 
 	if blend {

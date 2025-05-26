@@ -208,7 +208,27 @@ func (b *SelectBuilder) Build() (sql string, values []interface{}, err error) {
 }
 
 func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
-	buf := zutil.GetBuff(256)
+	estimatedSize := 256
+	if len(b.selectCols) > 0 {
+		estimatedSize += len(b.selectCols) * 10
+	}
+	if len(b.tables) > 0 {
+		estimatedSize += len(b.tables) * 10
+	}
+	if len(b.joinTables) > 0 {
+		estimatedSize += len(b.joinTables) * 20
+	}
+	if len(b.whereExprs) > 0 {
+		estimatedSize += len(b.whereExprs) * 15
+	}
+	if len(b.groupByCols) > 0 {
+		estimatedSize += len(b.groupByCols) * 10
+	}
+	if len(b.orderByCols) > 0 {
+		estimatedSize += len(b.orderByCols) * 10
+	}
+
+	buf := zutil.GetBuff(uint(estimatedSize))
 	defer zutil.PutBuff(buf)
 	buf.WriteString("SELECT ")
 
@@ -219,11 +239,27 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 	if len(b.selectCols) == 0 {
 		buf.WriteString("*")
 	} else {
-		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.selectCols), ", "))
+		driverValue := b.Cond.driver.Value()
+		quotedCols := driverValue.QuoteCols(b.selectCols)
+
+		for i, col := range quotedCols {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(col)
+		}
 	}
 
 	buf.WriteString(" FROM ")
-	buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.tables), ", "))
+
+	driverValue := b.Cond.driver.Value()
+	quotedTables := driverValue.QuoteCols(b.tables)
+	for i, table := range quotedTables {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(table)
+	}
 
 	for i := range b.joinTables {
 		if option := b.joinOptions[i]; option != "" {
@@ -236,29 +272,58 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 
 		if exprs := b.joinExprs[i]; len(exprs) > 0 {
 			buf.WriteString(" ON ")
-			buf.WriteString(strings.Join(b.joinExprs[i], " AND "))
-		}
 
+			for j, expr := range exprs {
+				if j > 0 {
+					buf.WriteString(" AND ")
+				}
+				buf.WriteString(expr)
+			}
+		}
 	}
 
 	if len(b.whereExprs) > 0 {
 		buf.WriteString(" WHERE ")
-		buf.WriteString(strings.Join(b.whereExprs, " AND "))
+
+		for i, expr := range b.whereExprs {
+			if i > 0 {
+				buf.WriteString(" AND ")
+			}
+			buf.WriteString(expr)
+		}
 	}
 
 	if len(b.groupByCols) > 0 {
 		buf.WriteString(" GROUP BY ")
-		buf.WriteString(strings.Join(b.groupByCols, ", "))
+
+		for i, col := range b.groupByCols {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(col)
+		}
 
 		if len(b.havingExprs) > 0 {
 			buf.WriteString(" HAVING ")
-			buf.WriteString(strings.Join(b.havingExprs, " AND "))
+
+			for i, expr := range b.havingExprs {
+				if i > 0 {
+					buf.WriteString(" AND ")
+				}
+				buf.WriteString(expr)
+			}
 		}
 	}
 
 	if len(b.orderByCols) > 0 {
 		buf.WriteString(" ORDER BY ")
-		buf.WriteString(strings.Join(b.orderByCols, ", "))
+
+		for i, col := range b.orderByCols {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(col)
+		}
 
 		if b.order != "" {
 			buf.WriteRune(' ')
@@ -266,7 +331,7 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 		}
 	}
 
-	switch b.Cond.driver.Value() {
+	switch driverValue {
 	default:
 		if b.limit > 0 {
 			buf.WriteString(" LIMIT ")

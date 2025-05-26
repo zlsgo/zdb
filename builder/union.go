@@ -1,10 +1,9 @@
 package builder
 
 import (
-	"bytes"
 	"strconv"
-	"strings"
 
+	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 )
 
@@ -94,8 +93,19 @@ func (b *UnionBuilder) Build() (sql string, values []interface{}, err error) {
 }
 
 func (b *UnionBuilder) build(blend bool) (sql string, args []interface{}) {
-	buf := &bytes.Buffer{}
+	estimatedSize := 256
+	if len(b.builders) > 0 {
+		estimatedSize += len(b.builders) * 50
+	}
+	if len(b.orderByCols) > 0 {
+		estimatedSize += len(b.orderByCols) * 10
+	}
+
+	buf := zutil.GetBuff(uint(estimatedSize))
+	defer zutil.PutBuff(buf)
+
 	driverType := b.cond.driver.Value()
+
 	if len(b.builders) > 0 {
 		needParen := driverType != driver.SQLite
 
@@ -126,7 +136,13 @@ func (b *UnionBuilder) build(blend bool) (sql string, args []interface{}) {
 
 	if len(b.orderByCols) > 0 {
 		buf.WriteString(" ORDER BY ")
-		buf.WriteString(strings.Join(b.orderByCols, ", "))
+
+		for i, col := range b.orderByCols {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(col)
+		}
 
 		if b.order != "" {
 			buf.WriteRune(' ')
@@ -137,7 +153,6 @@ func (b *UnionBuilder) build(blend bool) (sql string, args []interface{}) {
 	if b.limit >= 0 {
 		buf.WriteString(" LIMIT ")
 		buf.WriteString(strconv.Itoa(b.limit))
-
 	}
 
 	if driver.MySQL == driverType && b.limit >= 0 || driver.PostgreSQL == driverType {

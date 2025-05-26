@@ -3,7 +3,7 @@ package builder
 import (
 	"bytes"
 	"database/sql"
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/sohaha/zlsgo/zutil"
@@ -48,7 +48,16 @@ func argsCompileHandler(args *BuildCond) zutil.ArgsOpt {
 		case Builder:
 			s, args, _ := a.Build()
 			buf.WriteString(s)
-			if len(args) > 0 {
+
+			if argsLen := len(args); argsLen > 0 {
+				valuesLen := len(values)
+				neededCap := valuesLen + argsLen
+				if cap(values) < neededCap {
+					newValues := make([]interface{}, valuesLen, neededCap)
+					copy(newValues, values)
+					values = newValues
+				}
+
 				values = append(values, args...)
 			}
 		case sql.NamedArg:
@@ -57,13 +66,17 @@ func argsCompileHandler(args *BuildCond) zutil.ArgsOpt {
 		case rawArgs:
 			buf.WriteString(a.expr)
 		default:
-			switch args.driver.Value() {
+			driverType := args.driver.Value()
+
+			switch driverType {
+			case driver.PostgreSQL:
+				buf.WriteRune('$')
+				buf.WriteString(strconv.Itoa(len(values) + 1))
+			case driver.MsSQL:
+				buf.WriteString("@p")
+				buf.WriteString(strconv.Itoa(len(values) + 1))
 			default:
 				buf.WriteRune('?')
-			case driver.PostgreSQL:
-				_, _ = fmt.Fprintf(buf, "$%d", len(values)+1)
-			case driver.MsSQL:
-				_, _ = fmt.Fprintf(buf, "@p%d", len(values)+1)
 			}
 
 			values = append(values, arg)
