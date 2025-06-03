@@ -28,6 +28,14 @@ func init() {
 	log.ResetFlags(zlog.BitLevel)
 }
 
+type utils struct{}
+
+var Utils utils
+
+func (u utils) SetLog(l *zlog.Logger) {
+	log = l
+}
+
 func (j JsonTime) String() string {
 	t := time.Time(j)
 	if t.IsZero() {
