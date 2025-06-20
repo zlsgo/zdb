@@ -69,6 +69,7 @@ func parseQuery(e *DB, b builder.Builder) (ztype.Maps, error) {
 	if err != nil {
 		return make(ztype.Maps, 0), err
 	}
+	defer rows.Close()
 
 	result, total, err := ScanToMap(rows)
 	if total == 0 {

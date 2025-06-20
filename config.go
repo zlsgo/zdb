@@ -12,20 +12,17 @@ type Options struct {
 	MaxOpenConns int
 	// ConnMaxLifetime ConnMaxLifetime
 	ConnMaxLifetime time.Duration
-	// ExecMaxLifetime ExecMaxLifetime
-	// ExecMaxLifetime time.Duration
 }
 
 var defOption = Options{
-	MaxIdleConns:    0,
-	MaxOpenConns:    0,
-	ConnMaxLifetime: 0,
+	MaxIdleConns:    10,
+	MaxOpenConns:    100,
+	ConnMaxLifetime: time.Hour / 2,
 }
 
 func (e *DB) Options(fn func(o *Options)) {
 	options := defOption
 	fn(&options)
-	// e.execMaxLifetime = options.ExecMaxLifetime
 	for _, p := range e.pools {
 		p.db.SetMaxIdleConns(options.MaxIdleConns)
 		p.db.SetConnMaxLifetime(options.ConnMaxLifetime)
