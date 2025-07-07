@@ -198,7 +198,7 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 	}
 
 	if b.limit >= 0 {
-		if driverValue == driver.SQLite {
+		if driverValue == driver.SQLite || driverValue == driver.PostgreSQL {
 			buf.WriteString(" WHERE ")
 			buf.WriteString(IDKey)
 			buf.WriteString(" IN (")
