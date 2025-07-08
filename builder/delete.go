@@ -3,7 +3,6 @@ package builder
 import (
 	"errors"
 	"strconv"
-	"strings"
 
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -76,7 +75,7 @@ func (b *DeleteBuilder) String() string {
 // Build returns compiled DELETE string and Cond
 func (b *DeleteBuilder) Build() (sql string, values []interface{}, err error) {
 	if len(b.whereExprs) == 0 {
-		return "", nil, errors.New("update safety error: no where condition")
+		return "", nil, errors.New("delete safety error: no where condition")
 	}
 
 	sql, values = b.build(false)
@@ -84,13 +83,28 @@ func (b *DeleteBuilder) Build() (sql string, values []interface{}, err error) {
 }
 
 func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
-	estimatedSize := 256
-	estimatedSize += len(b.table) * 2
+	// More accurate size estimation
+	estimatedSize := 12 + len(b.table) + 4 // "DELETE FROM " + table + quotes
+	
 	if len(b.whereExprs) > 0 {
-		estimatedSize += len(b.whereExprs) * 15
+		estimatedSize += 7 // " WHERE "
+		for _, expr := range b.whereExprs {
+			estimatedSize += len(expr) + 5 // expr + " AND "
+		}
 	}
+	
 	if len(b.orderByCols) > 0 {
-		estimatedSize += len(b.orderByCols) * 10
+		estimatedSize += 10 // " ORDER BY "
+		for _, col := range b.orderByCols {
+			estimatedSize += len(col) + 2 // col + ", "
+		}
+		if b.order != "" {
+			estimatedSize += len(b.order) + 1 // order + space
+		}
+	}
+	
+	if b.limit >= 0 {
+		estimatedSize += 15 // " LIMIT " + number or complex subquery
 	}
 
 	buf := zutil.GetBuff(uint(estimatedSize))
@@ -134,22 +148,5 @@ func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
 }
 
 func (b *DeleteBuilder) buildStatement() []byte {
-	buf := zutil.GetBuff(256)
-	defer zutil.PutBuff(buf)
-	if len(b.whereExprs) > 0 {
-		buf.WriteString(" WHERE ")
-		buf.WriteString(strings.Join(b.whereExprs, " AND "))
-	}
-
-	if len(b.orderByCols) > 0 {
-		buf.WriteString(" ORDER BY ")
-		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.orderByCols), ", "))
-
-		if b.order != "" {
-			buf.WriteRune(' ')
-			buf.WriteString(b.order)
-		}
-	}
-
-	return buf.Bytes()
+	return buildWhereOrderStatement(b.Cond, b.whereExprs, b.orderByCols, b.order)
 }

@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/sohaha/zlsgo/zutil"
@@ -155,10 +157,40 @@ func (b *UnionBuilder) build(blend bool) (sql string, args []interface{}) {
 		buf.WriteString(strconv.Itoa(b.limit))
 	}
 
-	if driver.MySQL == driverType && b.limit >= 0 || driver.PostgreSQL == driverType {
-		if b.offset >= 0 {
+	if b.offset >= 0 {
+		switch driverType {
+		case driver.MySQL:
+			// MySQL requires LIMIT when using OFFSET
+			if b.limit >= 0 {
+				buf.WriteString(" OFFSET ")
+				buf.WriteString(strconv.Itoa(b.offset))
+			}
+		case driver.PostgreSQL:
+			// PostgreSQL supports OFFSET without LIMIT
 			buf.WriteString(" OFFSET ")
 			buf.WriteString(strconv.Itoa(b.offset))
+		case driver.SQLite:
+			// SQLite supports OFFSET without LIMIT (since version 3.8.0)
+			buf.WriteString(" OFFSET ")
+			buf.WriteString(strconv.Itoa(b.offset))
+		case driver.MsSQL:
+			// SQL Server uses OFFSET ROWS syntax, but only with ORDER BY
+			// Since this is UNION, we'll follow the same pattern as MySQL
+			if b.limit >= 0 {
+				buf.WriteString(" OFFSET ")
+				buf.WriteString(strconv.Itoa(b.offset))
+				buf.WriteString(" ROWS")
+			}
+		case driver.ClickHouse:
+			// ClickHouse supports OFFSET
+			buf.WriteString(" OFFSET ")
+			buf.WriteString(strconv.Itoa(b.offset))
+		case driver.Doris:
+			// Doris (based on MySQL) requires LIMIT with OFFSET
+			if b.limit >= 0 {
+				buf.WriteString(" OFFSET ")
+				buf.WriteString(strconv.Itoa(b.offset))
+			}
 		}
 	}
 
@@ -174,6 +206,20 @@ func (b *UnionBuilder) Var(arg interface{}) string {
 	return b.cond.Var(arg)
 }
 
+// Safety performs safety checks on the UNION builder
 func (b *UnionBuilder) Safety() error {
+	if len(b.builders) == 0 {
+		return errors.New("union safety error: no SELECT builders specified")
+	}
+	if len(b.builders) == 1 {
+		return errors.New("union safety warning: only one SELECT builder specified, UNION not needed")
+	}
+
+	for i, builder := range b.builders {
+		if err := builder.Safety(); err != nil {
+			return fmt.Errorf("union safety error: builder %d - %v", i, err)
+		}
+	}
+
 	return nil
 }

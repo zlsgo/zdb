@@ -14,7 +14,7 @@ var IDKey = "id"
 
 // Escape replaces `$` with `$$` in ident
 func Escape(ident string) string {
-	return strings.Replace(ident, "$", "$$", -1)
+	return strings.ReplaceAll(ident, "$", "$$")
 }
 
 // EscapeAll replaces `$` with `$$` in all strings of ident
@@ -84,4 +84,27 @@ func argsCompileHandler(args *BuildCond) zutil.ArgsOpt {
 
 		return values, true
 	})
+}
+
+// buildWhereOrderStatement builds common WHERE and ORDER BY statements for UPDATE and DELETE
+func buildWhereOrderStatement(cond *BuildCond, whereExprs []string, orderByCols []string, order string) []byte {
+	buf := zutil.GetBuff(256)
+	defer zutil.PutBuff(buf)
+	
+	if len(whereExprs) > 0 {
+		buf.WriteString(" WHERE ")
+		buf.WriteString(strings.Join(whereExprs, " AND "))
+	}
+
+	if len(orderByCols) > 0 {
+		buf.WriteString(" ORDER BY ")
+		buf.WriteString(strings.Join(cond.driver.Value().QuoteCols(orderByCols), ", "))
+
+		if order != "" {
+			buf.WriteRune(' ')
+			buf.WriteString(order)
+		}
+	}
+
+	return buf.Bytes()
 }

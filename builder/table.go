@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -215,19 +216,21 @@ func (b *CreateTableBuilder) Build() (sql string, values []interface{}, err erro
 	if b.args.driver != nil && b.args.driver.Value() == driver.Doris {
 		defer func() {
 			if r := recover(); r != nil {
-				// Log the error or handle it appropriately
 				err = fmt.Errorf("failed to modify SQL for Doris driver: %v", r)
 			}
 		}()
-		// 检查驱动是否支持 ModifyCreateTableSQL 方法
+
+		// Check if driver supports ModifyCreateTableSQL method
 		driverType := zreflect.TypeOf(b.args.driver)
-		m, ok := driverType.MethodByName("ModifyCreateTableSQL")
-		if ok {
+		if m, ok := driverType.MethodByName("ModifyCreateTableSQL"); ok {
 			driverValue := zreflect.ValueOf(b.args.driver)
 			sqlValue := zreflect.ValueOf(sql)
-			r := m.Func.Call([]reflect.Value{driverValue, sqlValue})
-			if len(r) > 0 && r[0].IsValid() {
-				sql = r[0].String()
+
+			if driverValue.IsValid() && sqlValue.IsValid() {
+				results := m.Func.Call([]reflect.Value{driverValue, sqlValue})
+				if len(results) > 0 && results[0].IsValid() && results[0].Kind() == reflect.String {
+					sql = results[0].String()
+				}
 			}
 		}
 	}
@@ -240,6 +243,25 @@ func (b *CreateTableBuilder) String() string {
 	return s
 }
 
+// Safety performs safety checks on the CREATE TABLE builder
 func (b *CreateTableBuilder) Safety() error {
+	if b.table == "" {
+		return errors.New("create table safety error: table name is required")
+	}
+
+	if len(b.columns) == 0 && len(b.defines) == 0 {
+		return errors.New("create table safety error: no columns or definitions specified")
+	}
+
+	if strings.Contains(b.table, " ") {
+		return errors.New("create table safety warning: table name contains spaces")
+	}
+
+	for i, col := range b.columns {
+		if col.Name == "" {
+			return fmt.Errorf("create table safety error: column %d has empty name", i)
+		}
+	}
+
 	return nil
 }

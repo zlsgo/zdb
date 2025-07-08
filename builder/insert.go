@@ -1,6 +1,9 @@
 package builder
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
 )
@@ -83,16 +86,34 @@ func (b *InsertBuilder) Build() (sql string, values []interface{}, err error) {
 }
 
 func (b *InsertBuilder) build(blend bool) (sql string, args []interface{}) {
-	estimatedSize := 256
-	estimatedSize += len(b.table) * 2
+	// More accurate size estimation
+	estimatedSize := len(b.verb) + 6  // verb + " INTO "
+	estimatedSize += len(b.table) + 4 // table + quotes
+
 	if len(b.cols) > 0 {
-		estimatedSize += len(b.cols) * 10
+		estimatedSize += 3 // " ()"
+		for _, col := range b.cols {
+			estimatedSize += len(col) + 4 // column + quotes + comma + space
+		}
 	}
+
+	estimatedSize += 8 // " VALUES "
+
 	if len(b.values) > 0 {
-		estimatedSize += len(b.values) * 20
+		for _, valueRow := range b.values {
+			estimatedSize += 3 // "(), "
+			for range valueRow {
+				estimatedSize += 3 // placeholder + comma + space
+			}
+		}
 	}
+
 	if len(b.options) > 0 {
-		estimatedSize += len(b.options) * 15
+		for _, opt := range b.options {
+			for _, o := range opt {
+				estimatedSize += len(o) + 1 // option + space
+			}
+		}
 	}
 
 	buf := zutil.GetBuff(uint(estimatedSize))
@@ -172,7 +193,24 @@ func (b *InsertBuilder) Var(arg interface{}) string {
 	return b.cond.Var(arg)
 }
 
+// Safety performs safety checks on the INSERT builder
 func (b *InsertBuilder) Safety() error {
+	if b.table == "" {
+		return errors.New("insert safety error: table name is required")
+	}
+	if len(b.cols) == 0 {
+		return errors.New("insert safety error: no columns specified")
+	}
+	if len(b.values) == 0 {
+		return errors.New("insert safety error: no values specified")
+	}
+
+	for i, valueRow := range b.values {
+		if len(valueRow) != len(b.cols) {
+			return fmt.Errorf("insert safety error: value row %d has %d values but %d columns specified",
+				i, len(valueRow), len(b.cols))
+		}
+	}
 	return nil
 }
 

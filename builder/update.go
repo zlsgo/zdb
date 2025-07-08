@@ -3,7 +3,6 @@ package builder
 import (
 	"errors"
 	"strconv"
-	"strings"
 
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -145,40 +144,45 @@ func (b *UpdateBuilder) Build() (sql string, value []interface{}, err error) {
 }
 
 func (b *UpdateBuilder) buildStatement() []byte {
-	buf := zutil.GetBuff(256)
-	defer zutil.PutBuff(buf)
-	if len(b.whereExprs) > 0 {
-		buf.WriteString(" WHERE ")
-		buf.WriteString(strings.Join(b.whereExprs, " AND "))
-	}
-
-	if len(b.orderByCols) > 0 {
-		buf.WriteString(" ORDER BY ")
-		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.orderByCols), ", "))
-
-		if b.order != "" {
-			buf.WriteRune(' ')
-			buf.WriteString(b.order)
-		}
-	}
-
-	return buf.Bytes()
+	return buildWhereOrderStatement(b.Cond, b.whereExprs, b.orderByCols, b.order)
 }
 
 func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
-	estimatedSize := 256
-	estimatedSize += len(b.table) * 2
-	if len(b.assignments) > 0 {
-		estimatedSize += len(b.assignments) * 15
+	// More accurate size estimation
+	estimatedSize := 7 + len(b.table) + 4 // "UPDATE " + table + quotes
+	estimatedSize += 5 // " SET "
+	
+	for _, assignment := range b.assignments {
+		estimatedSize += len(assignment) + 2 // assignment + ", "
 	}
+	
 	if len(b.whereExprs) > 0 {
-		estimatedSize += len(b.whereExprs) * 15
+		estimatedSize += 7 // " WHERE "
+		for _, expr := range b.whereExprs {
+			estimatedSize += len(expr) + 5 // expr + " AND "
+		}
 	}
+	
 	if len(b.orderByCols) > 0 {
-		estimatedSize += len(b.orderByCols) * 10
+		estimatedSize += 10 // " ORDER BY "
+		for _, col := range b.orderByCols {
+			estimatedSize += len(col) + 2 // col + ", "
+		}
+		if b.order != "" {
+			estimatedSize += len(b.order) + 1 // order + space
+		}
 	}
+	
+	if b.limit >= 0 {
+		estimatedSize += 15 // " LIMIT " + number or complex subquery
+	}
+	
 	if len(b.options) > 0 {
-		estimatedSize += len(b.options) * 15
+		for _, opt := range b.options {
+			for _, o := range opt {
+				estimatedSize += len(o) + 1 // option + space
+			}
+		}
 	}
 
 	buf := zutil.GetBuff(uint(estimatedSize))

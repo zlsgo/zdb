@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -86,7 +87,11 @@ func (b *SelectBuilder) From(table ...string) *SelectBuilder {
 
 // Select sets columns in SELECT
 func (b *SelectBuilder) Select(cols ...string) *SelectBuilder {
-	b.selectCols = b.selectCols[:0]
+	if cap(b.selectCols) >= len(cols)*2 {
+		b.selectCols = b.selectCols[:0]
+	} else {
+		b.selectCols = make([]string, 0, len(cols)*2)
+	}
 
 	for i := range cols {
 		if cols[i][0] == '(' {
@@ -208,24 +213,79 @@ func (b *SelectBuilder) Build() (sql string, values []interface{}, err error) {
 }
 
 func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
-	estimatedSize := 256
-	if len(b.selectCols) > 0 {
-		estimatedSize += len(b.selectCols) * 10
+	// More accurate size estimation
+	estimatedSize := 64 // Base size for "SELECT" + "FROM" + spaces
+
+	if b.distinct {
+		estimatedSize += 9 // "DISTINCT "
 	}
-	if len(b.tables) > 0 {
-		estimatedSize += len(b.tables) * 10
+
+	if len(b.selectCols) == 0 {
+		estimatedSize += 1 // "*"
+	} else {
+		for _, col := range b.selectCols {
+			estimatedSize += len(col) + 4 // column + quotes + comma + space
+		}
 	}
+
+	for _, table := range b.tables {
+		estimatedSize += len(table) + 4 // table + quotes + comma + space
+	}
+
 	if len(b.joinTables) > 0 {
-		estimatedSize += len(b.joinTables) * 20
+		for i, table := range b.joinTables {
+			estimatedSize += len(table) + 10 // table + " JOIN "
+			if len(b.joinOptions) > i && b.joinOptions[i] != "" {
+				estimatedSize += len(string(b.joinOptions[i])) + 1 // option + space
+			}
+			if len(b.joinExprs) > i {
+				for _, expr := range b.joinExprs[i] {
+					estimatedSize += len(expr) + 5 // expr + " AND "
+				}
+			}
+		}
 	}
+
 	if len(b.whereExprs) > 0 {
-		estimatedSize += len(b.whereExprs) * 15
+		estimatedSize += 7 // " WHERE "
+		for _, expr := range b.whereExprs {
+			estimatedSize += len(expr) + 5 // expr + " AND "
+		}
 	}
+
 	if len(b.groupByCols) > 0 {
-		estimatedSize += len(b.groupByCols) * 10
+		estimatedSize += 10 // " GROUP BY "
+		for _, col := range b.groupByCols {
+			estimatedSize += len(col) + 2 // col + ", "
+		}
+
+		if len(b.havingExprs) > 0 {
+			estimatedSize += 8 // " HAVING "
+			for _, expr := range b.havingExprs {
+				estimatedSize += len(expr) + 5 // expr + " AND "
+			}
+		}
 	}
+
 	if len(b.orderByCols) > 0 {
-		estimatedSize += len(b.orderByCols) * 10
+		estimatedSize += 10 // " ORDER BY "
+		for _, col := range b.orderByCols {
+			estimatedSize += len(col) + 2 // col + ", "
+		}
+		if b.order != "" {
+			estimatedSize += len(b.order) + 1 // order + space
+		}
+	}
+
+	if b.limit > 0 {
+		estimatedSize += 20 // " LIMIT " + number
+	}
+	if b.offset > 0 {
+		estimatedSize += 20 // " OFFSET " + number
+	}
+
+	if b.forWhat != "" {
+		estimatedSize += len(b.forWhat) + 5 // " FOR " + forWhat
 	}
 
 	buf := zutil.GetBuff(uint(estimatedSize))
@@ -385,4 +445,19 @@ func (b *SelectBuilder) build(blend bool) (sql string, values []interface{}) {
 	}
 
 	return b.Cond.Compile(buf.String())
+}
+
+// Safety performs safety checks on the SELECT builder
+func (b *SelectBuilder) Safety() error {
+	if len(b.tables) == 0 {
+		return errors.New("select safety error: no tables specified")
+	}
+
+	if len(b.whereExprs) == 0 && len(b.joinExprs) == 0 && b.limit < 0 {
+		if len(b.tables) == 1 {
+			return errors.New("select safety warning: query may result in full table scan (no WHERE clause or LIMIT)")
+		}
+	}
+
+	return nil
 }

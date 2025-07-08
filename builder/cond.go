@@ -59,8 +59,12 @@ func (c *BuildCond) LE(field string, value interface{}) string {
 
 // In represents "Field IN (value...)"
 func (c *BuildCond) In(field string, value ...interface{}) string {
-	vs := make([]string, 0, len(value))
+	if len(value) == 0 {
+		// Empty IN clause is always false in SQL
+		return "1 = 0"
+	}
 
+	vs := make([]string, 0, len(value))
 	for _, v := range value {
 		vs = append(vs, c.Var(v))
 	}
@@ -69,12 +73,15 @@ func (c *BuildCond) In(field string, value ...interface{}) string {
 
 // NotIn represents "Field NOT IN (value...)"
 func (c *BuildCond) NotIn(field string, value ...interface{}) string {
-	vs := make([]string, 0, len(value))
+	if len(value) == 0 {
+		// Empty NOT IN clause is always true in SQL
+		return "1 = 1"
+	}
 
+	vs := make([]string, 0, len(value))
 	for _, v := range value {
 		vs = append(vs, c.Var(v))
 	}
-
 	return c.quoteField(field) + " NOT IN (" + strings.Join(vs, ", ") + ")"
 }
 
@@ -110,12 +117,54 @@ func (c *BuildCond) NotBetween(field string, lower, upper interface{}) string {
 
 // Or represents OR logic like "expr1 OR expr2 OR expr3"
 func (c *BuildCond) Or(orExpr ...string) string {
-	return "(" + strings.Join(orExpr, " OR ") + ")"
+	if len(orExpr) == 0 {
+		return ""
+	}
+	if len(orExpr) == 1 {
+		return "(" + orExpr[0] + ")"
+	}
+
+	capacity := 2
+	for _, expr := range orExpr {
+		capacity += len(expr) + 4 // expr + " OR "
+	}
+
+	var b strings.Builder
+	b.Grow(capacity)
+	b.WriteRune('(')
+	b.WriteString(orExpr[0])
+	for _, expr := range orExpr[1:] {
+		b.WriteString(" OR ")
+		b.WriteString(expr)
+	}
+	b.WriteRune(')')
+	return b.String()
 }
 
 // And represents AND logic like "expr1 AND expr2 AND expr3"
 func (c *BuildCond) And(expr ...string) string {
-	return "(" + strings.Join(expr, " AND ") + ")"
+	if len(expr) == 0 {
+		return ""
+	}
+	if len(expr) == 1 {
+		return "(" + expr[0] + ")"
+	}
+
+	capacity := 2
+	for _, e := range expr {
+		capacity += len(e) + 5 // expr + " AND "
+	}
+
+	var b strings.Builder
+	b.Grow(capacity)
+	b.WriteRune('(')
+	b.WriteString(expr[0])
+	for _, e := range expr[1:] {
+		b.WriteString(" AND ")
+		b.WriteString(e)
+	}
+	b.WriteRune(')')
+	return b.String()
 }
 
 func (c *BuildCond) Cond(field, condition string, value interface{}) string {
