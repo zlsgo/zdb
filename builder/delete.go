@@ -3,6 +3,7 @@ package builder
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/sohaha/zlsgo/zutil"
 	"github.com/zlsgo/zdb/driver"
@@ -100,37 +101,29 @@ func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
 	buf.WriteString("DELETE FROM ")
 	buf.WriteString(driverValue.Quote(b.table))
 
-	if len(b.whereExprs) > 0 {
-		buf.WriteString(" WHERE ")
+	if b.limit >= 0 {
+		if driverValue != driver.MySQL {
+			buf.WriteString(" WHERE ")
+			buf.WriteString(IDKey)
+			buf.WriteString(" IN (")
 
-		for i, expr := range b.whereExprs {
-			if i > 0 {
-				buf.WriteString(" AND ")
-			}
-			buf.WriteString(expr)
+			buf.WriteString("SELECT ")
+			buf.WriteString(IDKey)
+			buf.WriteString(" FROM ")
+			buf.WriteString(driverValue.Quote(b.table))
+			buf.Write(b.buildStatement())
+			buf.WriteString(" LIMIT ")
+			buf.WriteString(strconv.Itoa(b.limit))
+
+			buf.WriteString(")")
+		} else {
+			buf.Write(b.buildStatement())
+
+			buf.WriteString(" LIMIT ")
+			buf.WriteString(strconv.Itoa(b.limit))
 		}
-	}
-
-	if len(b.orderByCols) > 0 {
-		buf.WriteString(" ORDER BY ")
-
-		quotedCols := driverValue.QuoteCols(b.orderByCols)
-		for i, col := range quotedCols {
-			if i > 0 {
-				buf.WriteString(", ")
-			}
-			buf.WriteString(col)
-		}
-
-		if b.order != "" {
-			buf.WriteRune(' ')
-			buf.WriteString(b.order)
-		}
-	}
-
-	if b.limit > 0 {
-		buf.WriteString(" LIMIT ")
-		buf.WriteString(strconv.Itoa(b.limit))
+	} else {
+		buf.Write(b.buildStatement())
 	}
 
 	if blend {
@@ -138,4 +131,25 @@ func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
 	}
 
 	return b.Cond.Compile(buf.String())
+}
+
+func (b *DeleteBuilder) buildStatement() []byte {
+	buf := zutil.GetBuff(256)
+	defer zutil.PutBuff(buf)
+	if len(b.whereExprs) > 0 {
+		buf.WriteString(" WHERE ")
+		buf.WriteString(strings.Join(b.whereExprs, " AND "))
+	}
+
+	if len(b.orderByCols) > 0 {
+		buf.WriteString(" ORDER BY ")
+		buf.WriteString(strings.Join(b.Cond.driver.Value().QuoteCols(b.orderByCols), ", "))
+
+		if b.order != "" {
+			buf.WriteRune(' ')
+			buf.WriteString(b.order)
+		}
+	}
+
+	return buf.Bytes()
 }
