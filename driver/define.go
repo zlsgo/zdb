@@ -63,27 +63,34 @@ func (f Typ) String() string {
 
 // Quote adds quote for name to make sure the name can be used safely
 func (f Typ) Quote(col string) string {
-	if col == "*" || col[0] == '(' {
+	if col == "*" || (len(col) > 0 && col[0] == '(') {
 		return col
 	}
 
-	sl := strings.SplitN(col, " ", 2)
-	if strings.IndexRune(sl[0], '.') > 0 {
-		s := strings.Split(sl[0], ".")
-		for i := range s {
-			if s[i] == "*" {
-				continue
-			}
-			s[i] = f.quote(s[i])
-		}
-		sl[0] = strings.Join(s, ".")
-	} else {
-		sl[0] = f.quote(sl[0])
+	if spaceIdx := strings.IndexByte(col, ' '); spaceIdx > 0 {
+		parts := strings.SplitN(col, " ", 2)
+		parts[0] = f.quoteSingleIdentifier(parts[0])
+		return strings.Join(parts, " ")
 	}
 
-	return strings.Join(sl, " ")
+	return f.quoteSingleIdentifier(col)
 }
 
+// quoteSingleIdentifier quotes a single identifier, handling dot notation
+func (f Typ) quoteSingleIdentifier(col string) string {
+	if dotIdx := strings.IndexByte(col, '.'); dotIdx > 0 {
+		parts := strings.Split(col, ".")
+		for i, part := range parts {
+			if part != "*" {
+				parts[i] = f.quote(part)
+			}
+		}
+		return strings.Join(parts, ".")
+	}
+	return f.quote(col)
+}
+
+// quote quotes a single identifier
 func (f Typ) quote(col string) string {
 	if strings.ContainsRune(col, '(') {
 		return col
@@ -98,12 +105,15 @@ func (f Typ) quote(col string) string {
 	return col
 }
 
+// QuoteCols quotes a list of identifiers
 func (f Typ) QuoteCols(cols []string) []string {
-	nm := make([]string, 0, len(cols))
-
-	for i := range cols {
-		nm = append(nm, f.Quote(cols[i]))
+	if len(cols) == 0 {
+		return cols
 	}
 
+	nm := make([]string, len(cols))
+	for i, col := range cols {
+		nm[i] = f.Quote(col)
+	}
 	return nm
 }

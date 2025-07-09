@@ -214,5 +214,5 @@ func (c *Config) CreateIndex(table, name string, columns []string, indexType str
 }
 
 func (c *Config) RenameIndex(table, oldName, newName string) (sql string, values []interface{}) {
-	panic("implement me")
+	return fmt.Sprintf("ALTER TABLE `%s` RENAME INDEX `%s` TO `%s`", table, oldName, newName), []interface{}{}
 }
