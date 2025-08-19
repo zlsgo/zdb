@@ -12,6 +12,7 @@ func (e *DB) QueryToMaps(query string, args ...interface{}) (ztype.Maps, error) 
 	if err != nil {
 		return ztype.Maps{}, err
 	}
+	defer rows.Close()
 
 	result, _, err := ScanToMap(rows)
 	return result, err
@@ -22,6 +23,7 @@ func (e *DB) QueryTo(out interface{}, query string, args ...interface{}) error {
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 
 	result, _, err := ScanToMap(rows)
 	if err != nil {

@@ -99,20 +99,28 @@ func (s *Session) queryContext(ctx context.Context, query string, args ...interf
 		}()
 	}
 
-	stmt, err := s.config.db.PrepareContext(ctx, query)
-	if err != nil {
-		return nil, err
+	if s.tx != nil {
+		return s.tx.QueryContext(ctx, query, args...)
 	}
-	defer stmt.Close()
-	return stmt.QueryContext(ctx, args...)
+	return s.config.db.QueryContext(ctx, query, args...)
 }
 
 func (s *Session) transaction(run DBCallback) error {
+	if s.tx != nil {
+		e := &DB{
+			session: s,
+			driver:  s.config.driver,
+		}
+		return run(e)
+	}
 	db, err := s.config.db.Begin()
 	if err != nil {
 		return err
 	}
 	s.tx = db
+	defer func() {
+		s.tx = nil
+	}()
 	e := &DB{
 		session: s,
 		driver:  s.config.driver,
@@ -122,8 +130,5 @@ func (s *Session) transaction(run DBCallback) error {
 		_ = db.Rollback()
 		return err
 	}
-	defer func() {
-		s.tx = nil
-	}()
 	return db.Commit()
 }

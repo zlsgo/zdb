@@ -1,0 +1,9 @@
+include:
+  - https://cnb.cool/zls-tools/vm/-/blob/main/ide.yml
+  - https://cnb.cool/zls-tools/vm/-/blob/main/tools/sync-github-zlsgo.yml
+
+$:
+  push:
+    sync_github:
+      env:
+          GIT_USER: zlsgo
