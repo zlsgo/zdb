@@ -31,7 +31,6 @@ func TestBase(t *testing.T) {
 
 	baseExec(db, tt)
 	baseQuery(db, t)
-	return
 	baseTransaction(db, t, tt)
 }
 

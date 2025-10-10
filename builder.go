@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"sort"
 	"sync"
 
 	"github.com/sohaha/zlsgo/zarray"
@@ -65,8 +66,6 @@ func (e *DB) BatchInsertWithConfig(
 	}
 
 	var finalId int64
-	var mu sync.Mutex
-	errChan := make(chan error, len(datas))
 
 	workers := config.Workers
 	if workers <= 0 {
@@ -75,6 +74,13 @@ func (e *DB) BatchInsertWithConfig(
 
 	pool := make(chan struct{}, workers)
 	var wg sync.WaitGroup
+
+	type result struct {
+		index int
+		id    int64
+		err   error
+	}
+	resultChan := make(chan result, len(datas))
 
 	err = e.Transaction(func(tx *DB) error {
 		for i := range datas {
@@ -88,25 +94,34 @@ func (e *DB) BatchInsertWithConfig(
 				}()
 
 				id, err := tx.insertData(builder.Insert(table), cols, chunk, options...)
-				if err != nil {
-					errChan <- fmt.Errorf("batch %d: %w", index, err)
-					return
-				}
-
-				mu.Lock()
-				if index == len(datas)-1 {
-					finalId = id
-				}
-				mu.Unlock()
+				resultChan <- result{index: index, id: id, err: err}
 			}(datas[i], i)
 		}
 
 		wg.Wait()
-		close(errChan)
+		close(resultChan)
 
-		for err := range errChan {
-			return err
+		results := make([]result, 0, len(datas))
+		var errs []error
+
+		for r := range resultChan {
+			results = append(results, r)
+			if r.err != nil {
+				errs = append(errs, fmt.Errorf("batch %d: %w", r.index, r.err))
+			}
 		}
+
+		if len(errs) > 0 {
+			if len(errs) == 1 {
+				return errs[0]
+			}
+			return fmt.Errorf("batch insert failed with %d errors: %v", len(errs), errs)
+		}
+
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].index < results[j].index
+		})
+		finalId = results[len(results)-1].id
 
 		return nil
 	})
