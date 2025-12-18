@@ -91,8 +91,12 @@ func (e *DB) toDialect(c driver.IfeConfig) driver.Dialect {
 	return e.driver
 }
 
-func (e *DB) GetSQLDB() (*sql.DB, error) {
-	db, err := e.getSession(nil, true)
+func (e *DB) GetSQLDB(isMaster ...bool) (*sql.DB, error) {
+	master := true
+	if len(isMaster) > 0 {
+		master = isMaster[0]
+	}
+	db, err := e.getSession(nil, master)
 	if err != nil {
 		return nil, err
 	}
