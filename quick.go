@@ -31,6 +31,9 @@ func (e *DB) QueryTo(out interface{}, query string, args ...interface{}) error {
 	}
 	v := zreflect.ValueOf(out)
 	if reflect.Indirect(v).Kind() != reflect.Slice {
+		if len(result) == 0 {
+			return ErrNotFound
+		}
 		return ztype.ValueConv(result[0], v)
 	}
 

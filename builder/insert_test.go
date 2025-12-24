@@ -1,6 +1,7 @@
 package builder_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sohaha/zlsgo"
@@ -78,4 +79,92 @@ func TestReplaceInsert(t *testing.T) {
 
 	tt.Equal("REPLACE INTO `user` (`username`, `age`) VALUES (?, ?)", sql)
 	tt.Equal([]interface{}{"new user", 18}, values)
+}
+
+func TestInsertIgnore(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.InsertIgnore("user")
+	sb.SetDriver(&mysql.Config{})
+	sb.Cols("username", "age")
+	sb.Values("new user", 18)
+
+	sql, values, err := sb.Build()
+	tt.NoError(err)
+	tt.Log(sql, values)
+
+	tt.Equal("INSERT IGNORE INTO `user` (`username`, `age`) VALUES (?, ?)", sql)
+	tt.Equal([]interface{}{"new user", 18}, values)
+}
+
+func TestInsertString(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Insert("user")
+	sb.SetDriver(&mysql.Config{})
+	sb.Cols("username", "age")
+	sb.Values("new user", 18)
+
+	sql := sb.String()
+	tt.EqualTrue(strings.Contains(sql, "INSERT INTO"))
+	tt.EqualTrue(strings.Contains(sql, "`user`"))
+}
+
+func TestInsertVar(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Insert("user")
+	sb.SetDriver(&mysql.Config{})
+
+	placeholder := sb.Var("test_value")
+	tt.EqualTrue(placeholder != "")
+}
+
+func TestInsertSafety(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Insert("")
+	err := sb.Safety()
+	tt.EqualTrue(err != nil)
+
+	sb = builder.Insert("user")
+	err = sb.Safety()
+	tt.EqualTrue(err != nil)
+
+	sb = builder.Insert("user")
+	sb.Cols("username")
+	err = sb.Safety()
+	tt.EqualTrue(err != nil)
+
+	sb = builder.Insert("user")
+	sb.Cols("username", "age")
+	sb.Values("user1", 18)
+	err = sb.Safety()
+	tt.NoError(err)
+
+	sb = builder.Insert("user")
+	sb.Cols("username", "age")
+	sb.Values("user1")
+	err = sb.Safety()
+	tt.EqualTrue(err != nil)
+}
+
+func TestInsertBatchValues(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Insert("user")
+	sb.SetDriver(&mysql.Config{})
+	sb.Cols("username", "age")
+	sb.BatchValues([][]interface{}{
+		{"user1", 18},
+		{"user2", 25},
+		{"user3", 30},
+	})
+
+	sql, values, err := sb.Build()
+	tt.NoError(err)
+	tt.Log(sql, values)
+
+	tt.Equal("INSERT INTO `user` (`username`, `age`) VALUES (?, ?), (?, ?), (?, ?)", sql)
+	tt.Equal([]interface{}{"user1", 18, "user2", 25, "user3", 30}, values)
 }

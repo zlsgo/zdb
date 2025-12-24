@@ -5,10 +5,13 @@ import (
 )
 
 func (e *DB) Migration(fn func(db *DB, d driver.Dialect) error) error {
-	db, err := e.getSession(nil, false)
+	s, err := e.getSession(nil, true)
 	if err != nil {
 		return err
 	}
-	defer e.putSessionPool(db, false)
-	return fn(e, db.config.driver)
+	defer e.putSessionPool(s, false)
+
+	nEngine := *e
+	nEngine.session = s
+	return fn(&nEngine, s.config.driver)
 }

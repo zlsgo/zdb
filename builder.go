@@ -2,11 +2,7 @@ package zdb
 
 import (
 	"errors"
-	"fmt"
 	"math"
-	"runtime"
-	"sort"
-	"sync"
 
 	"github.com/sohaha/zlsgo/zarray"
 	"github.com/sohaha/zlsgo/ztype"
@@ -17,13 +13,13 @@ import (
 // BatchConfig batch config
 type BatchConfig struct {
 	MaxBatch int // max batch size
-	Workers  int // worker count
+	InferIDs bool
 }
 
 // DefaultBatchConfig default batch config
 var DefaultBatchConfig = BatchConfig{
 	MaxBatch: 1000,
-	Workers:  5,
+	InferIDs: false,
 }
 
 func (e *DB) Insert(table string, data interface{}, options ...string) (lastId int64, err error) {
@@ -53,99 +49,28 @@ func (e *DB) BatchInsertWithConfig(
 	if err != nil {
 		return []int64{0}, err
 	}
-
-	datas := zarray.Chunk(args, config.MaxBatch)
-
-	if len(datas) <= 1 {
-		var id int64
-		id, err = e.insertData(builder.Insert(table), cols, args, options...)
-		if err != nil {
-			return []int64{0}, err
-		}
-		return e.batchIds(args, id, err)
-	}
-
-	var finalId int64
-
-	workers := config.Workers
-	if workers <= 0 {
-		workers = runtime.NumCPU()
-	}
-
-	pool := make(chan struct{}, workers)
-	var wg sync.WaitGroup
-
-	type result struct {
-		index int
-		id    int64
-		err   error
-	}
-	resultChan := make(chan result, len(datas))
-
-	err = e.Transaction(func(tx *DB) error {
-		for i := range datas {
-			pool <- struct{}{}
-			wg.Add(1)
-
-			go func(chunk [][]interface{}, index int) {
-				defer func() {
-					<-pool
-					wg.Done()
-				}()
-
-				id, err := tx.insertData(builder.Insert(table), cols, chunk, options...)
-				resultChan <- result{index: index, id: id, err: err}
-			}(datas[i], i)
-		}
-
-		wg.Wait()
-		close(resultChan)
-
-		results := make([]result, 0, len(datas))
-		var errs []error
-
-		for r := range resultChan {
-			results = append(results, r)
-			if r.err != nil {
-				errs = append(errs, fmt.Errorf("batch %d: %w", r.index, r.err))
-			}
-		}
-
-		if len(errs) > 0 {
-			if len(errs) == 1 {
-				return errs[0]
-			}
-			return fmt.Errorf("batch insert failed with %d errors: %v", len(errs), errs)
-		}
-
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].index < results[j].index
-		})
-		finalId = results[len(results)-1].id
-
-		return nil
-	})
-	if err != nil {
-		return []int64{0}, err
-	}
-
-	return e.batchIds(args, finalId, err)
+	return e.batchWriteWithConfig(func() *builder.InsertBuilder {
+		return builder.Insert(table)
+	}, cols, args, config, options...)
 }
 
-func (e *DB) batchIds(args [][]interface{}, id int64, err error) ([]int64, error) {
-	var sub bool
+func (e *DB) batchIds(total int, lastID int64) []int64 {
+	ids := make([]int64, total)
+	if total == 0 {
+		return ids
+	}
 	if e.driver.Value() == driver.MySQL {
-		sub = true
-	}
-	ids := make([]int64, len(args))
-	for i := 0; i < len(args); i++ {
-		if sub {
-			ids[i] = id + int64(i)
-		} else {
-			ids[i] = id - int64(i)
+		for i := 0; i < total; i++ {
+			ids[i] = lastID + int64(i)
 		}
+		return ids
 	}
-	return ids, err
+
+	base := lastID - int64(total-1)
+	for i := 0; i < total; i++ {
+		ids[i] = base + int64(i)
+	}
+	return ids
 }
 
 func (e *DB) insertData(
@@ -154,6 +79,22 @@ func (e *DB) insertData(
 	args [][]interface{},
 	options ...string,
 ) (lastId int64, err error) {
+	ids, err := e.insertDataReturningIDs(b, cols, args, options...)
+	if err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, errInsertEmpty
+	}
+	return ids[len(ids)-1], nil
+}
+
+func (e *DB) insertDataReturningIDs(
+	b *builder.InsertBuilder,
+	cols []string,
+	args [][]interface{},
+	options ...string,
+) ([]int64, error) {
 	b.SetDriver(e.driver)
 
 	if len(options) > 0 {
@@ -167,33 +108,127 @@ func (e *DB) insertData(
 
 	sql, values, err := b.Build()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if len(values) == 0 {
-		return 0, errInsertEmpty
+		return nil, errInsertEmpty
 	}
 
-	isPostgreSQL := e.driver.Value() == driver.PostgreSQL
-	if !isPostgreSQL {
-		result, err := e.Exec(sql, values...)
-		if err != nil {
-			return 0, err
+	driverValue := e.driver.Value()
+	if driverValue == driver.PostgreSQL {
+		idKey := e.idKey
+		if idKey == "" {
+			idKey = builder.IDKey
 		}
-
-		// if i, _ := result.RowsAffected(); i == 0 {
-		// 	return 0, errInsertEmpty
-		// }
-
-		return result.LastInsertId()
+		rows, err := e.QueryToMaps(sql+" RETURNING "+driverValue.Quote(idKey), values...)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) == 0 {
+			return nil, ErrNotFound
+		}
+		ids := make([]int64, len(rows))
+		for i := range rows {
+			ids[i] = rows[i].Get(idKey).Int64()
+		}
+		return ids, nil
 	}
 
-	result, err := e.QueryToMaps(sql+" RETURNING "+builder.IDKey, values...)
+	result, err := e.Exec(sql, values...)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return result[0].Get(builder.IDKey).Int64(), nil
+	lastID, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(args) <= 1 {
+		return []int64{lastID}, nil
+	}
+
+	return e.batchIds(len(args), lastID), nil
+}
+
+func (e *DB) batchWriteWithConfig(
+	builderFn func() *builder.InsertBuilder,
+	cols []string,
+	args [][]interface{},
+	config BatchConfig,
+	options ...string,
+) ([]int64, error) {
+	if config.MaxBatch <= 0 {
+		config.MaxBatch = DefaultBatchConfig.MaxBatch
+	}
+	if len(args) == 0 {
+		return []int64{0}, errInsertEmpty
+	}
+
+	if e.driver.Value() == driver.PostgreSQL || config.InferIDs || len(args) == 1 {
+		return e.batchWriteFast(builderFn, cols, args, config.MaxBatch, options...)
+	}
+
+	return e.batchWriteStrict(builderFn, cols, args, options...)
+}
+
+func (e *DB) batchWriteFast(
+	builderFn func() *builder.InsertBuilder,
+	cols []string,
+	args [][]interface{},
+	maxBatch int,
+	options ...string,
+) ([]int64, error) {
+	datas := zarray.Chunk(args, maxBatch)
+
+	if len(datas) <= 1 {
+		ids, err := e.insertDataReturningIDs(builderFn(), cols, args, options...)
+		if err != nil {
+			return []int64{0}, err
+		}
+		return ids, nil
+	}
+
+	ids := make([]int64, 0, len(args))
+	err := e.Transaction(func(tx *DB) error {
+		for i := range datas {
+			chunkIDs, err := tx.insertDataReturningIDs(builderFn(), cols, datas[i], options...)
+			if err != nil {
+				return err
+			}
+			ids = append(ids, chunkIDs...)
+		}
+		return nil
+	})
+	if err != nil {
+		return []int64{0}, err
+	}
+
+	return ids, nil
+}
+
+func (e *DB) batchWriteStrict(
+	builderFn func() *builder.InsertBuilder,
+	cols []string,
+	args [][]interface{},
+	options ...string,
+) ([]int64, error) {
+	ids := make([]int64, 0, len(args))
+	err := e.Transaction(func(tx *DB) error {
+		for i := range args {
+			rowIDs, err := tx.insertDataReturningIDs(builderFn(), cols, [][]interface{}{args[i]}, options...)
+			if err != nil {
+				return err
+			}
+			ids = append(ids, rowIDs...)
+		}
+		return nil
+	})
+	if err != nil {
+		return []int64{0}, err
+	}
+	return ids, nil
 }
 
 func (e *DB) Replace(table string, data interface{}, options ...string) (lastId int64, err error) {
@@ -209,42 +244,22 @@ func (e *DB) BatchReplace(
 	data interface{},
 	options ...string,
 ) (lastId []int64, err error) {
+	return e.BatchReplaceWithConfig(table, data, DefaultBatchConfig, options...)
+}
+
+func (e *DB) BatchReplaceWithConfig(
+	table string,
+	data interface{},
+	config BatchConfig,
+	options ...string,
+) (lastId []int64, err error) {
 	cols, args, err := parseMaps2(ztype.ToMaps(data))
 	if err != nil {
 		return []int64{0}, err
 	}
-
-	datas := zarray.Chunk(args, DefaultBatchConfig.MaxBatch)
-
-	if len(datas) <= 1 {
-		var id int64
-		id, err = e.insertData(builder.Replace(table), cols, args, options...)
-		if err != nil {
-			return []int64{0}, err
-		}
-		return e.batchIds(args, id, err)
-	}
-
-	var id int64
-	var finalId int64
-
-	err = e.Transaction(func(tx *DB) error {
-		for i := range datas {
-			id, err = tx.insertData(builder.Replace(table), cols, datas[i], options...)
-			if err != nil {
-				return err
-			}
-			if i == len(datas)-1 {
-				finalId = id
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return []int64{0}, err
-	}
-
-	return e.batchIds(args, finalId, err)
+	return e.batchWriteWithConfig(func() *builder.InsertBuilder {
+		return builder.Replace(table)
+	}, cols, args, config, options...)
 }
 
 func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (ztype.Map, error) {
@@ -258,8 +273,11 @@ func (e *DB) FindOne(table string, fn func(b *builder.SelectBuilder) error) (zty
 	if err != nil {
 		return ztype.Map{}, err
 	}
+	if len(resultMap) == 0 {
+		return ztype.Map{}, ErrNotFound
+	}
 
-	return resultMap[0], err
+	return resultMap[0], nil
 }
 
 type Pages struct {

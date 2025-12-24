@@ -53,8 +53,17 @@ func (c *Config) GetDsn() string {
 	if c.dsn != "" {
 		return c.dsn
 	}
-	c.dsn = fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s?%s",
-		c.User, c.Password, ztype.ToString(zutil.IfVal(c.Host == "", "127.0.0.1", c.Host)), ztype.ToInt(zutil.IfVal(c.Port == 0, 1433, c.Port)), c.DBName, c.Parameters)
+	params := c.Parameters
+	if len(params) > 0 {
+		if params[0] == '?' || params[0] == '&' {
+			params = params[1:]
+		}
+	}
+	c.dsn = fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s",
+		c.User, c.Password, ztype.ToString(zutil.IfVal(c.Host == "", "127.0.0.1", c.Host)), ztype.ToInt(zutil.IfVal(c.Port == 0, 1433, c.Port)), c.DBName)
+	if params != "" {
+		c.dsn += "&" + params
+	}
 	return c.dsn
 }
 

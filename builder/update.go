@@ -19,6 +19,7 @@ type UpdateBuilder struct {
 	options     [][]string
 	limit       int
 	allowEmpty  bool
+	limitBy     string
 }
 
 var _ Builder = new(UpdateBuilder)
@@ -122,6 +123,11 @@ func (b *UpdateBuilder) Limit(limit int) *UpdateBuilder {
 	return b
 }
 
+func (b *UpdateBuilder) LimitBy(col string) *UpdateBuilder {
+	b.limitBy = col
+	return b
+}
+
 func (b *UpdateBuilder) Option(opt ...string) *UpdateBuilder {
 	b.options = append(b.options, opt)
 	return b
@@ -137,6 +143,9 @@ func (b *UpdateBuilder) String() string {
 func (b *UpdateBuilder) Build() (sql string, value []interface{}, err error) {
 	if len(b.whereExprs) == 0 {
 		return "", nil, errors.New("update safety error: no where condition")
+	}
+	if b.limit >= 0 && b.Cond.driver.Value() != driver.MySQL && b.limitBy == "" {
+		return "", nil, errors.New("update safety error: limit requires LimitBy for non-MySQL")
 	}
 
 	sql, value = b.build(false)
@@ -203,12 +212,13 @@ func (b *UpdateBuilder) build(blend bool) (sql string, args []interface{}) {
 
 	if b.limit >= 0 {
 		if driverValue != driver.MySQL {
+			limitByQuoted := driverValue.Quote(b.limitBy)
 			buf.WriteString(" WHERE ")
-			buf.WriteString(IDKey)
+			buf.WriteString(limitByQuoted)
 			buf.WriteString(" IN (")
 
 			buf.WriteString("SELECT ")
-			buf.WriteString(IDKey)
+			buf.WriteString(limitByQuoted)
 			buf.WriteString(" FROM ")
 			buf.WriteString(driverValue.Quote(b.table))
 			buf.Write(b.buildStatement())

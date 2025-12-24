@@ -47,4 +47,17 @@ func TestDB_Query(t *testing.T) {
 	err = db.QueryTo(&resp, "select * from "+table)
 	tt.NoError(err)
 	t.Log(resp)
+
+	var emptyResp struct {
+		Name string `json:"name"`
+	}
+	err = db.QueryTo(&emptyResp, "select * from "+table+" where name = ?", "not_exist")
+	tt.EqualExit(zdb.ErrNotFound, err)
+
+	var emptySlice []struct {
+		Name string `json:"name"`
+	}
+	err = db.QueryTo(&emptySlice, "select * from "+table+" where name = ?", "not_exist")
+	tt.NoError(err)
+	tt.Equal(0, len(emptySlice))
 }

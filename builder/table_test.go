@@ -1,6 +1,7 @@
 package builder_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -142,4 +143,105 @@ func TestHasTable(t *testing.T) {
 		tt.Equal("SELECT count(*) AS count FROM INFORMATION_SCHEMA.tables WHERE table_name = ? AND table_catalog = ?", sql)
 		tt.Equal([]interface{}{"shop", "test"}, values)
 	}
+}
+
+func TestTableGetDriver(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	table := builder.NewTable("user")
+	table.SetDriver(&mysql.Config{})
+
+	d := table.GetDriver()
+	tt.EqualTrue(d != nil)
+	tt.Equal(driver.MySQL, d.Value())
+}
+
+func TestTableHasIndex(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	table := builder.NewTable("user")
+	table.SetDriver(&mysql.Config{})
+	sql, values, _ := table.HasIndex("idx_name")
+	tt.EqualTrue(sql != "")
+	tt.Log(sql, values)
+}
+
+func TestTableCreateIndex(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	table := builder.NewTable("user")
+	table.SetDriver(&mysql.Config{})
+	sql, values := table.CreateIndex("idx_name", []string{"name"}, "")
+	tt.EqualTrue(sql != "")
+	tt.Log(sql, values)
+}
+
+func TestTableGetColumn(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	table := builder.NewTable("user")
+	table.SetDriver(&mysql.Config{})
+	sql, values, _ := table.GetColumn()
+	tt.EqualTrue(sql != "")
+	tt.Log(sql, values)
+}
+
+func TestTableRenameColumn(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	table := builder.NewTable("user")
+	table.SetDriver(&mysql.Config{})
+	sql, values := table.RenameColumn("old_name", "new_name")
+	tt.EqualTrue(sql != "")
+	tt.Log(sql, values)
+}
+
+func TestTableAddColumn(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	table := builder.NewTable("user")
+	table.SetDriver(&mysql.Config{})
+	sql, values := table.AddColumn("email", schema.String, func(f *schema.Field) {
+		f.Size = 255
+	})
+	tt.EqualTrue(sql != "")
+	tt.EqualTrue(strings.Contains(sql, "ADD"))
+	tt.Log(sql, values)
+}
+
+func TestTableDropColumn(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	table := builder.NewTable("user")
+	table.SetDriver(&mysql.Config{})
+	sql, values := table.DropColumn("old_column")
+	tt.EqualTrue(strings.Contains(sql, "DROP COLUMN"))
+	tt.Log(sql, values)
+}
+
+func TestCreateTableSafety(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	b := builder.CreateTable("")
+	err := b.Safety()
+	tt.EqualTrue(err != nil)
+
+	b = builder.CreateTable("user")
+	err = b.Safety()
+	tt.EqualTrue(err != nil)
+
+	b = builder.CreateTable("user with space")
+	b.Define("id", "INT")
+	err = b.Safety()
+	tt.EqualTrue(err != nil)
+
+	b = builder.CreateTable("user")
+	b.Column(schema.NewField("", schema.String))
+	err = b.Safety()
+	tt.EqualTrue(err != nil)
+
+	b = builder.CreateTable("user")
+	b.Define("id", "INT")
+	err = b.Safety()
+	tt.NoError(err)
 }

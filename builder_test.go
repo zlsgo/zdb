@@ -170,6 +170,12 @@ func TestBuilder(t *testing.T) {
 		return nil
 	})
 	tt.EqualTrue(err != nil)
+
+	_, err = db.FindOne(table, func(sb *builder.SelectBuilder) error {
+		sb.Where(sb.Cond.EQ("name", "not_exist_name"))
+		return nil
+	})
+	tt.Equal(zdb.ErrNotFound, err)
 }
 
 func TestFindComplex(t *testing.T) {

@@ -1,6 +1,6 @@
 module github.com/zlsgo/zdb
 
-go 1.24.0
+go 1.18
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.35.0
@@ -8,7 +8,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
-	github.com/sohaha/zlsgo v1.7.19-0.20251009112837-8dd44218096b
+	github.com/sohaha/zlsgo v1.7.21-0.20251218120211-2c2d30a4a0fc
 	modernc.org/sqlite v1.39.0
 )
 

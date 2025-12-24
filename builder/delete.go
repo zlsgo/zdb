@@ -16,6 +16,7 @@ type DeleteBuilder struct {
 	whereExprs  []string
 	orderByCols []string
 	limit       int
+	limitBy     string
 }
 
 var _ Builder = new(DeleteBuilder)
@@ -66,6 +67,11 @@ func (b *DeleteBuilder) Limit(limit int) *DeleteBuilder {
 	return b
 }
 
+func (b *DeleteBuilder) LimitBy(col string) *DeleteBuilder {
+	b.limitBy = col
+	return b
+}
+
 // String returns the compiled DELETE string
 func (b *DeleteBuilder) String() string {
 	s, _ := b.build(true)
@@ -76,6 +82,9 @@ func (b *DeleteBuilder) String() string {
 func (b *DeleteBuilder) Build() (sql string, values []interface{}, err error) {
 	if len(b.whereExprs) == 0 {
 		return "", nil, errors.New("delete safety error: no where condition")
+	}
+	if b.limit >= 0 && b.Cond.driver.Value() != driver.MySQL && b.limitBy == "" {
+		return "", nil, errors.New("delete safety error: limit requires LimitBy for non-MySQL")
 	}
 
 	sql, values = b.build(false)
@@ -117,12 +126,13 @@ func (b *DeleteBuilder) build(blend bool) (sql string, args []interface{}) {
 
 	if b.limit >= 0 {
 		if driverValue != driver.MySQL {
+			limitByQuoted := driverValue.Quote(b.limitBy)
 			buf.WriteString(" WHERE ")
-			buf.WriteString(IDKey)
+			buf.WriteString(limitByQuoted)
 			buf.WriteString(" IN (")
 
 			buf.WriteString("SELECT ")
-			buf.WriteString(IDKey)
+			buf.WriteString(limitByQuoted)
 			buf.WriteString(" FROM ")
 			buf.WriteString(driverValue.Quote(b.table))
 			buf.Write(b.buildStatement())

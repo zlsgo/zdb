@@ -2,6 +2,7 @@ package builder_test
 
 import (
 	dbsql "database/sql"
+	"strings"
 	"testing"
 
 	"github.com/sohaha/zlsgo"
@@ -29,6 +30,30 @@ func TestSelect(t *testing.T) {
 
 	tt.Equal("SELECT `id`, `username`, count(*) as count FROM `user` WHERE `age` >= ? AND `age` <= ? AND username = ? ORDER BY id DESC", sql)
 	tt.Equal([]interface{}{18, 38, "manage"}, values)
+}
+
+func TestSelectCommaSplit(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("id, username").From("user")
+	sb.SetDriver(&mysql.Config{})
+
+	sql, values, err := sb.Build()
+	tt.NoError(err)
+	tt.Equal("SELECT `id`, `username` FROM `user`", sql)
+	tt.Equal(0, len(values))
+}
+
+func TestSelectCommaSplitFunctions(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("concat(first, last) as full, count(*) as c").From("user")
+	sb.SetDriver(&mysql.Config{})
+
+	sql, values, err := sb.Build()
+	tt.NoError(err)
+	tt.Equal("SELECT concat(first, last) as full, count(*) as c FROM `user`", sql)
+	tt.Equal(0, len(values))
 }
 
 func TestSelectJoin(t *testing.T) {
@@ -125,4 +150,115 @@ func TestSelectOther(t *testing.T) {
 	sql, values, err := sb.Build()
 	tt.NoError(err)
 	tt.Log(sql, values)
+}
+
+func TestNamedArgBindingMySQL(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*").From("user")
+	sb.SetDriver(&mysql.Config{})
+	sb.Where(
+		sb.Cond.EQ("age", dbsql.Named("age", 18)),
+		sb.Cond.EQ("name", dbsql.Named("name", "tom")),
+	)
+
+	sql, values, err := sb.Build()
+	tt.NoError(err)
+	tt.Equal("SELECT * FROM `user` WHERE `age` = ? AND `name` = ?", sql)
+	tt.Equal([]interface{}{18, "tom"}, values)
+}
+
+func TestNamedArgBindingMsSQL(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*").From("user")
+	sb.SetDriver(&mssql.Config{})
+	sb.Where(
+		sb.Cond.EQ("age", dbsql.Named("age", 18)),
+		sb.Cond.EQ("name", dbsql.Named("name", "tom")),
+	)
+
+	sql, values, err := sb.Build()
+	tt.NoError(err)
+	tt.Equal(`SELECT * FROM "user" WHERE "age" = @age AND "name" = @name`, sql)
+	tt.Equal([]interface{}{dbsql.Named("age", 18), dbsql.Named("name", "tom")}, values)
+}
+
+func TestSelectForUpdate(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*").From("user").ForUpdate()
+	sb.SetDriver(&mysql.Config{})
+
+	sql, _, err := sb.Build()
+	tt.NoError(err)
+	tt.EqualTrue(strings.Contains(sql, "FOR UPDATE"))
+}
+
+func TestSelectForShare(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*").From("user").ForShare()
+	sb.SetDriver(&mysql.Config{})
+
+	sql, _, err := sb.Build()
+	tt.NoError(err)
+	tt.EqualTrue(strings.Contains(sql, "FOR SHARE"))
+}
+
+func TestSelectSafety(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*")
+	err := sb.Safety()
+	tt.EqualTrue(err != nil)
+
+	sb = builder.Select("*").From("user")
+	err = sb.Safety()
+	tt.EqualTrue(err != nil)
+
+	sb = builder.Select("*").From("user").Where("id = 1")
+	err = sb.Safety()
+	tt.NoError(err)
+
+	sb = builder.Select("*").From("user").Limit(10)
+	err = sb.Safety()
+	tt.NoError(err)
+
+	sb = builder.Select("*").From("user", "order")
+	err = sb.Safety()
+	tt.NoError(err)
+}
+
+func TestSelectOrderByClear(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*").From("user").OrderBy("id").OrderBy()
+	sb.SetDriver(&mysql.Config{})
+
+	sql, _, err := sb.Build()
+	tt.NoError(err)
+	tt.EqualTrue(!strings.Contains(sql, "ORDER BY"))
+}
+
+func TestSelectAscWithCol(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*").From("user").Asc("id", "name")
+	sb.SetDriver(&mysql.Config{})
+
+	sql, _, err := sb.Build()
+	tt.NoError(err)
+	tt.EqualTrue(strings.Contains(sql, "ORDER BY id, name ASC"))
+}
+
+func TestSelectDescWithCol(t *testing.T) {
+	tt := zlsgo.NewTest(t)
+
+	sb := builder.Select("*").From("user").Desc("id", "name")
+	sb.SetDriver(&mysql.Config{})
+
+	sql, _, err := sb.Build()
+	tt.NoError(err)
+	tt.EqualTrue(strings.Contains(sql, "ORDER BY id, name DESC"))
 }

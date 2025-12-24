@@ -59,11 +59,23 @@ func Query(table string) *SelectBuilder {
 // Select  return new SELECT builder and sets columns in SELECT
 func Select(cols ...string) *SelectBuilder {
 	cond := newCond(DefaultDriver, false)
+	selectCols := make([]string, 0, len(cols)*2)
+	for i := range cols {
+		if cols[i] == "" {
+			continue
+		}
+		for _, col := range splitSelectColumns(cols[i]) {
+			if col == "" {
+				continue
+			}
+			selectCols = append(selectCols, col)
+		}
+	}
 	return &SelectBuilder{
 		limit:      -1,
 		offset:     -1,
 		Cond:       cond,
-		selectCols: cols,
+		selectCols: selectCols,
 	}
 }
 
@@ -94,11 +106,15 @@ func (b *SelectBuilder) Select(cols ...string) *SelectBuilder {
 	}
 
 	for i := range cols {
-		if cols[i][0] == '(' {
-			b.selectCols = append(b.selectCols, cols[i])
+		if cols[i] == "" {
 			continue
 		}
-		b.selectCols = append(b.selectCols, strings.Split(cols[i], ",")...)
+		for _, col := range splitSelectColumns(cols[i]) {
+			if col == "" {
+				continue
+			}
+			b.selectCols = append(b.selectCols, col)
+		}
 	}
 
 	return b
@@ -460,4 +476,63 @@ func (b *SelectBuilder) Safety() error {
 	}
 
 	return nil
+}
+
+func splitSelectColumns(input string) []string {
+	if !strings.ContainsRune(input, ',') {
+		return []string{strings.TrimSpace(input)}
+	}
+
+	cols := make([]string, 0, 2)
+	start := 0
+	depth := 0
+	inSingle := false
+	inDouble := false
+	inBacktick := false
+
+	for i := 0; i < len(input); i++ {
+		switch input[i] {
+		case '\'':
+			if !inDouble && !inBacktick {
+				inSingle = !inSingle
+			}
+		case '"':
+			if !inSingle && !inBacktick {
+				inDouble = !inDouble
+			}
+		case '`':
+			if !inSingle && !inDouble {
+				inBacktick = !inBacktick
+			}
+		case '(':
+			if !inSingle && !inDouble && !inBacktick {
+				depth++
+			}
+		case ')':
+			if !inSingle && !inDouble && !inBacktick && depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 && !inSingle && !inDouble && !inBacktick {
+				part := strings.TrimSpace(input[start:i])
+				if part != "" {
+					cols = append(cols, part)
+				}
+				start = i + 1
+			}
+		}
+	}
+
+	if start < len(input) {
+		part := strings.TrimSpace(input[start:])
+		if part != "" {
+			cols = append(cols, part)
+		}
+	}
+
+	if len(cols) == 0 {
+		return []string{strings.TrimSpace(input)}
+	}
+
+	return cols
 }

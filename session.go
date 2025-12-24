@@ -30,7 +30,7 @@ func (e *DB) getSessionPool() *Session {
 }
 
 func (e *DB) putSessionPool(s *Session, force bool) {
-	if e.session != nil && !force && !e.force {
+	if e.session != nil && !force {
 		return
 	}
 	s.tx = nil
@@ -75,20 +75,10 @@ func (s *Session) execContext(ctx context.Context, query string, args ...interfa
 		}()
 	}
 
-	var (
-		err  error
-		stmt *sql.Stmt
-	)
 	if s.tx != nil {
-		stmt, err = s.tx.PrepareContext(ctx, query)
-	} else {
-		stmt, err = s.config.db.PrepareContext(ctx, query)
+		return s.tx.ExecContext(ctx, query, args...)
 	}
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	return stmt.ExecContext(ctx, args...)
+	return s.config.db.ExecContext(ctx, query, args...)
 }
 
 func (s *Session) queryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {

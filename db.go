@@ -19,9 +19,8 @@ type (
 		driver  driver.Dialect
 		session *Session
 		pools   []*Config
-		force   bool
 		Debug   bool
-		isFixed bool
+		idKey   string
 	}
 	JsonTime time.Time
 )
@@ -29,7 +28,9 @@ type (
 var engines sync.Map
 
 func New(cfg driver.IfeConfig, alias ...string) (e *DB, err error) {
-	e = &DB{}
+	e = &DB{
+		idKey: builder.IDKey,
+	}
 	err = e.add(cfg)
 	if len(alias) > 0 {
 		engines.Store(alias[0], e)
@@ -38,7 +39,9 @@ func New(cfg driver.IfeConfig, alias ...string) (e *DB, err error) {
 }
 
 func NewCluster(cfgs []driver.IfeConfig, alias ...string) (e *DB, err error) {
-	e = &DB{}
+	e = &DB{
+		idKey: builder.IDKey,
+	}
 	for i := range cfgs {
 		err = e.add(cfgs[i])
 		if err != nil {
@@ -64,6 +67,7 @@ func MustInstance(alias string) (*DB, error) {
 
 	return &DB{
 		driver: builder.DefaultDriver,
+		idKey:  builder.IDKey,
 	}, ErrDBNotExist
 }
 
@@ -113,4 +117,8 @@ func (e *DB) Close() error {
 		}
 	}
 	return firstErr
+}
+
+func (e *DB) SetIDKey(key string) {
+	e.idKey = key
 }

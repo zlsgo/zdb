@@ -6,3 +6,4 @@
 .idea/zdb_dev.iml
 .idea/codeStyles/codeStyleConfig.xml
 .idea/inspectionProfiles/Project_Default.xml
+coverage*.out

@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"database/sql"
 	"strings"
 
 	"github.com/sohaha/zlsgo/zutil"
@@ -25,6 +26,13 @@ func newCond(d driver.Dialect, onlyNamed bool) *BuildCond {
 	a := zutil.NewArgs(opts...)
 	args.Args = *a
 	return args
+}
+
+func (c *BuildCond) Var(value interface{}) string {
+	if arg, ok := value.(sql.NamedArg); ok && c.driver.Value() != driver.MsSQL {
+		value = arg.Value
+	}
+	return c.Args.Var(value)
 }
 
 // EQ represents "Field = value"

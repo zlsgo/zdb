@@ -44,6 +44,7 @@ func Named(name string, arg interface{}) interface{} {
 
 func argsCompileHandler(args *BuildCond) zutil.ArgsOpt {
 	return zutil.WithCompileHandler(func(buf *bytes.Buffer, values []interface{}, arg interface{}) ([]interface{}, bool) {
+		driverType := args.driver.Value()
 		switch a := arg.(type) {
 		case Builder:
 			s, args, _ := a.Build()
@@ -60,28 +61,31 @@ func argsCompileHandler(args *BuildCond) zutil.ArgsOpt {
 
 				values = append(values, args...)
 			}
-		case sql.NamedArg:
-			buf.WriteRune('@')
-			buf.WriteString(a.Name)
+			return values, true
 		case rawArgs:
 			buf.WriteString(a.expr)
-		default:
-			driverType := args.driver.Value()
-
-			switch driverType {
-			case driver.PostgreSQL:
-				buf.WriteRune('$')
-				buf.WriteString(strconv.Itoa(len(values) + 1))
-			case driver.MsSQL:
-				buf.WriteString("@p")
-				buf.WriteString(strconv.Itoa(len(values) + 1))
-			default:
-				buf.WriteRune('?')
+			return values, true
+		case sql.NamedArg:
+			if driverType == driver.MsSQL {
+				buf.WriteRune('@')
+				buf.WriteString(a.Name)
+				return values, true
 			}
-
-			values = append(values, arg)
+			arg = a.Value
 		}
 
+		switch driverType {
+		case driver.PostgreSQL:
+			buf.WriteRune('$')
+			buf.WriteString(strconv.Itoa(len(values) + 1))
+		case driver.MsSQL:
+			buf.WriteString("@p")
+			buf.WriteString(strconv.Itoa(len(values) + 1))
+		default:
+			buf.WriteRune('?')
+		}
+
+		values = append(values, arg)
 		return values, true
 	})
 }
@@ -90,7 +94,7 @@ func argsCompileHandler(args *BuildCond) zutil.ArgsOpt {
 func buildWhereOrderStatement(cond *BuildCond, whereExprs []string, orderByCols []string, order string) []byte {
 	buf := zutil.GetBuff(256)
 	defer zutil.PutBuff(buf)
-	
+
 	if len(whereExprs) > 0 {
 		buf.WriteString(" WHERE ")
 		buf.WriteString(strings.Join(whereExprs, " AND "))

@@ -54,7 +54,6 @@ func (e *DB) Source(run DBCallback, ctx ...context.Context) error {
 
 	nEngine := *e
 	nEngine.session = s
-	nEngine.isFixed = true
 	return run(&nEngine)
 }
 
@@ -67,6 +66,5 @@ func (e *DB) Replica(run DBCallback, ctx ...context.Context) error {
 
 	nEngine := *e
 	nEngine.session = s
-	nEngine.isFixed = true
 	return run(&nEngine)
 }

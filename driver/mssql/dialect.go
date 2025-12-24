@@ -117,18 +117,26 @@ func (c *Config) HasTable(table string) (sql string, values []interface{}, proce
 }
 
 func (c *Config) GetColumn(table string) (sql string, values []interface{}, process func(result ztype.Maps) ztype.Map) {
-	return "", []interface{}{}, func(data ztype.Maps) ztype.Map {
-		// TODO 待实现
-		return ztype.Map{}
+	return "SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND TABLE_CATALOG = ?", []interface{}{table, c.databaseName()}, func(data ztype.Maps) ztype.Map {
+		columns := make(ztype.Map, len(data))
+		data.ForEach(func(i int, val ztype.Map) bool {
+			name := ztype.ToString(val["column_name"])
+			if name == "" {
+				return true
+			}
+			columns[name] = ztype.Map{"type": ztype.ToString(val["data_type"])}
+			return true
+		})
+		return columns
 	}
 }
 
 func (c *Config) RenameColumn(table, oldName, newName string) (sql string, values []interface{}) {
-	return "ALTER TABLE ? RENAME COLUMN ? TO ?", []interface{}{table, oldName, newName}
+	return fmt.Sprintf("EXEC sp_rename '%s.%s', '%s', 'COLUMN'", table, oldName, newName), []interface{}{}
 }
 
 func (c *Config) HasIndex(table, name string) (sql string, values []interface{}, process func(ztype.Maps) bool) {
-	return "SELECT count(*) FROM sys.indexes WHERE name=? AND object_id=OBJECT_ID(?)", []interface{}{name, table}, func(data ztype.Maps) bool {
+	return "SELECT count(*) AS count FROM sys.indexes WHERE name = ? AND object_id = OBJECT_ID(?)", []interface{}{name, table}, func(data ztype.Maps) bool {
 		if len(data) > 0 {
 			return ztype.ToInt64(data[0]["count"]) > 0
 		}
@@ -137,7 +145,15 @@ func (c *Config) HasIndex(table, name string) (sql string, values []interface{},
 }
 
 func (c *Config) CreateIndex(table, name string, columns []string, indexType string) (sql string, values []interface{}) {
-	panic("待实现")
+	prefix := strings.TrimSpace(indexType)
+	if prefix != "" {
+		prefix = strings.ToUpper(prefix) + " "
+	}
+	cols := make([]string, 0, len(columns))
+	for i := range columns {
+		cols = append(cols, fmt.Sprintf("[%s]", columns[i]))
+	}
+	return fmt.Sprintf("CREATE %sINDEX [%s] ON [%s] (%s)", prefix, name, table, strings.Join(cols, ", ")), []interface{}{}
 }
 
 func (c *Config) RenameIndex(table, oldName, newName string) (sql string, values []interface{}) {

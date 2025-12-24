@@ -20,6 +20,7 @@ type (
 		Columns() ([]string, error)
 		Next() bool
 		Scan(dest ...interface{}) error
+		Err() error
 	}
 )
 
@@ -48,6 +49,12 @@ func Scan(rows IfeRows, out interface{}) (int, error) {
 	}
 
 	v := zreflect.ValueOf(out)
+	if count == 0 {
+		if reflect.Indirect(v).Kind() != reflect.Slice {
+			return 0, ErrNotFound
+		}
+		return 0, nil
+	}
 	if reflect.Indirect(v).Kind() != reflect.Slice {
 		return count, ztype.ValueConv(data[0], v, convOption)
 	}
@@ -93,6 +100,9 @@ func resolveDataFromRows(rows IfeRows) (ztype.Maps, int, error) {
 		}
 		result = append(result, entry)
 		count++
+	}
+	if err = rows.Err(); err != nil {
+		return result, count, err
 	}
 	return result, count, nil
 }
