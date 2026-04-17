@@ -11,7 +11,6 @@ func (e *DB) Migration(fn func(db *DB, d driver.Dialect) error) error {
 	}
 	defer e.putSessionPool(s, false)
 
-	nEngine := *e
-	nEngine.session = s
-	return fn(&nEngine, s.config.driver)
+	nEngine := e.withSession(s)
+	return fn(nEngine, s.config.driver)
 }

@@ -35,6 +35,7 @@ func (e *DB) putSessionPool(s *Session, force bool) {
 	}
 	s.tx = nil
 	s.config = nil
+	s.ctx = nil
 	sessionPool.Put(s)
 }
 
@@ -95,15 +96,11 @@ func (s *Session) queryContext(ctx context.Context, query string, args ...interf
 	return s.config.db.QueryContext(ctx, query, args...)
 }
 
-func (s *Session) transaction(run DBCallback) error {
+func (s *Session) transaction(parent *DB, run DBCallback) error {
 	if s.tx != nil {
-		e := &DB{
-			session: s,
-			driver:  s.config.driver,
-		}
-		return run(e)
+		return run(parent.withSession(s))
 	}
-	db, err := s.config.db.Begin()
+	db, err := s.config.db.BeginTx(s.ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -111,11 +108,7 @@ func (s *Session) transaction(run DBCallback) error {
 	defer func() {
 		s.tx = nil
 	}()
-	e := &DB{
-		session: s,
-		driver:  s.config.driver,
-	}
-	err = run(e)
+	err = run(parent.withSession(s))
 	if err != nil {
 		_ = db.Rollback()
 		return err

@@ -122,3 +122,12 @@ func (e *DB) Close() error {
 func (e *DB) SetIDKey(key string) {
 	e.idKey = key
 }
+
+func (e *DB) withSession(s *Session) *DB {
+	nEngine := *e
+	nEngine.session = s
+	if s != nil && s.config != nil {
+		nEngine.driver = s.config.driver
+	}
+	return &nEngine
+}

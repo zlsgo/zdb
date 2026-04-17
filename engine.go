@@ -39,10 +39,10 @@ func (e *DB) Transaction(run DBCallback, ctx ...context.Context) error {
 		}
 		defer e.putSessionPool(db, true)
 
-		return db.transaction(run)
+		return db.transaction(e, run)
 	}
 
-	return e.session.transaction(run)
+	return e.session.transaction(e, run)
 }
 
 func (e *DB) Source(run DBCallback, ctx ...context.Context) error {
@@ -50,11 +50,9 @@ func (e *DB) Source(run DBCallback, ctx ...context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer e.putSessionPool(s, true)
+	defer e.putSessionPool(s, false)
 
-	nEngine := *e
-	nEngine.session = s
-	return run(&nEngine)
+	return run(e.withSession(s))
 }
 
 func (e *DB) Replica(run DBCallback, ctx ...context.Context) error {
@@ -62,9 +60,7 @@ func (e *DB) Replica(run DBCallback, ctx ...context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer e.putSessionPool(s, true)
+	defer e.putSessionPool(s, false)
 
-	nEngine := *e
-	nEngine.session = s
-	return run(&nEngine)
+	return run(e.withSession(s))
 }
