@@ -34,8 +34,8 @@ func (e *DB) QueryTo(out interface{}, query string, args ...interface{}) error {
 		if len(result) == 0 {
 			return ErrNotFound
 		}
-		return ztype.ValueConv(result[0], v)
+		return ztype.ValueConv(result[0], v, convOption)
 	}
 
-	return ztype.ValueConv(result, v)
+	return ztype.ValueConv(result, v, convOption)
 }

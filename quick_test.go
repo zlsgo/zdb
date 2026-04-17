@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/sohaha/zlsgo"
+	"github.com/sohaha/zlsgo/ztime"
 	"github.com/zlsgo/zdb"
+	"github.com/zlsgo/zdb/builder"
 	"github.com/zlsgo/zdb/testdata"
 )
 
@@ -26,6 +28,7 @@ func TestDB_Query(t *testing.T) {
 	data := map[string]interface{}{
 		"name": "test1",
 		"age":  18,
+		"date": ztime.Now(),
 	}
 	_, _ = db.Insert(table, data)
 	rows, err := db.QueryToMaps("select * from " + table)
@@ -60,4 +63,24 @@ func TestDB_Query(t *testing.T) {
 	err = db.QueryTo(&emptySlice, "select * from "+table+" where name = ?", "not_exist")
 	tt.NoError(err)
 	tt.Equal(0, len(emptySlice))
+
+	var dated struct {
+		Name string       `json:"name"`
+		Date zdb.JsonTime `json:"date"`
+	}
+	err = db.QueryTo(&dated, "select * from "+table+" where name = ?", "test1")
+	tt.NoError(err)
+	tt.Equal("test1", dated.Name)
+	tt.Equal(ztime.Now(), dated.Date.String())
+
+	found, err := zdb.FindOne[struct {
+		Name string       `json:"name"`
+		Date zdb.JsonTime `json:"date"`
+	}](db, table, func(b *builder.SelectBuilder) error {
+		b.Where(b.Cond.EQ("name", "test1"))
+		return nil
+	})
+	tt.NoError(err)
+	tt.Equal("test1", found.Name)
+	tt.Equal(ztime.Now(), found.Date.String())
 }

@@ -17,7 +17,7 @@ func Find[T any](e *DB, table string, fn func(b *builder.SelectBuilder) error) (
 	var m []T
 
 	v := zreflect.ValueOf(&m)
-	return m, ztype.ValueConv(data, v)
+	return m, ztype.ValueConv(data, v, convOption)
 }
 
 func FindOne[T any](e *DB, table string, fn func(b *builder.SelectBuilder) error) (T, error) {
@@ -28,5 +28,5 @@ func FindOne[T any](e *DB, table string, fn func(b *builder.SelectBuilder) error
 	}
 
 	v := zreflect.ValueOf(&m)
-	return m, ztype.ValueConv(data, v)
+	return m, ztype.ValueConv(data, v, convOption)
 }
