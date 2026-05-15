@@ -5,6 +5,7 @@ package sqlite3
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/sohaha/zlsgo/zfile"
@@ -43,6 +44,8 @@ func (c *Config) GetDsn() string {
 		f := c.File
 		if f == "" {
 			f = "zlsgo.db"
+		} else if strings.HasPrefix(f, ":") {
+			c.Memory = true
 		}
 		parameters := c.Parameters
 		if parameters == "" {

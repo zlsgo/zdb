@@ -4,6 +4,8 @@
 package sqlite3
 
 import (
+	"strings"
+
 	"github.com/sohaha/zlsgo/zfile"
 	"github.com/sohaha/zlsgo/ztype"
 	"github.com/sohaha/zlsgo/zutil"
@@ -25,6 +27,8 @@ func (c *Config) GetDsn() string {
 		f := c.File
 		if f == "" {
 			f = "zlsgo.db"
+		} else if strings.HasPrefix(f, ":") {
+			c.Memory = true
 		}
 		c.dsn = "file:" + zfile.RealPath(f) + pragmas + ztype.ToString(zutil.IfVal(c.Memory, "&cache=shared&mode=memory", ""))
 	}
