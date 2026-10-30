@@ -14,6 +14,7 @@ type Session struct {
 	tx     *sql.Tx
 	config *Config
 	ctx    context.Context
+	gen    *poolGen
 }
 
 type DBCallback func(e *DB) error
@@ -33,6 +34,11 @@ func (e *DB) putSessionPool(s *Session, force bool) {
 	if e.session != nil && !force {
 		return
 	}
+
+	if s.gen != nil {
+		s.gen.inflight.Add(-1)
+		s.gen = nil
+	}
 	s.tx = nil
 	s.config = nil
 	s.ctx = nil
@@ -45,13 +51,29 @@ func (e *DB) getSession(s *Session, master bool, ctx ...context.Context) (*Sessi
 	if e.session != nil {
 		return e.session, nil
 	}
-	n := len(e.pools)
-	if n == 0 {
-		return nil, ErrDBNotExist
-	}
 	if s != nil {
 		return s, nil
 	}
+
+	var g *poolGen
+	for {
+		g = e.curGen()
+		if g == nil {
+			return nil, ErrDBNotExist
+		}
+		g.inflight.Add(1)
+		if e.curGen() == g {
+			break
+		}
+		g.inflight.Add(-1)
+	}
+
+	n := len(g.pools)
+	if n == 0 {
+		g.inflight.Add(-1)
+		return nil, ErrDBNotExist
+	}
+
 	s = e.getSessionPool()
 	if len(ctx) > 0 && ctx[0] != nil {
 		s.ctx = ctx[0]
@@ -64,7 +86,8 @@ func (e *DB) getSession(s *Session, master bool, ctx ...context.Context) (*Sessi
 			i = zstring.RandInt(1, n-1)
 		}
 	}
-	s.config = e.pools[i]
+	s.config = g.pools[i]
+	s.gen = g
 	return s, nil
 }
 

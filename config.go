@@ -23,7 +23,7 @@ var defOption = Options{
 func (e *DB) Options(fn func(o *Options)) {
 	options := defOption
 	fn(&options)
-	for _, p := range e.pools {
+	for _, p := range e.poolSlice() {
 		p.db.SetMaxIdleConns(options.MaxIdleConns)
 		p.db.SetConnMaxLifetime(options.ConnMaxLifetime)
 		p.db.SetMaxOpenConns(options.MaxOpenConns)

@@ -3,6 +3,7 @@ package zdb
 import (
 	"database/sql"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zlsgo/zdb/builder"
@@ -18,9 +19,14 @@ type (
 	DB struct {
 		driver  driver.Dialect
 		session *Session
-		pools   []*Config
+		cur     atomic.Pointer[poolGen]
 		Debug   bool
 		idKey   string
+	}
+
+	poolGen struct {
+		pools    []*Config
+		inflight atomic.Int64
 	}
 	JsonTime time.Time
 )
@@ -83,7 +89,12 @@ func (e *DB) add(c driver.IfeConfig) (err error) {
 	cfg.driver = e.toDialect(c)
 
 	if err = cfg.db.Ping(); err == nil {
-		e.pools = append(e.pools, cfg)
+		var pools []*Config
+		if g := e.cur.Load(); g != nil {
+			pools = append(pools, g.pools...)
+		}
+		pools = append(pools, cfg)
+		e.cur.Store(&poolGen{pools: pools})
 	}
 	return err
 }
@@ -109,14 +120,63 @@ func (e *DB) GetSQLDB(isMaster ...bool) (*sql.DB, error) {
 	return db.config.db, nil
 }
 
-func (e *DB) Close() error {
+func (e *DB) poolSlice() []*Config {
+	g := e.cur.Load()
+	if g == nil {
+		return nil
+	}
+	return g.pools
+}
+
+func (e *DB) curGen() *poolGen {
+	return e.cur.Load()
+}
+
+func (e *DB) SwapPools(next []*Config) (old []*Config) {
+	oldGen := e.cur.Swap(&poolGen{pools: next})
+	if oldGen == nil {
+		return nil
+	}
+	oldGen.drain(swapDrainTimeout)
+	return oldGen.pools
+}
+
+const swapDrainTimeout = 5 * time.Second
+
+func (g *poolGen) drain(timeout time.Duration) {
+	if g.inflight.Load() == 0 {
+		return
+	}
+	deadline := time.Now().Add(timeout)
+	for g.inflight.Load() > 0 {
+		if time.Now().After(deadline) {
+			log.Warnf("pool swap drain timeout: %d session(s) still in flight, old connections will be released once they finish", g.inflight.Load())
+			return
+		}
+
+		time.Sleep(200 * time.Microsecond)
+	}
+}
+
+func (e *DB) TakePools() []*Config {
+	return e.SwapPools(nil)
+}
+
+func ClosePools(pools []*Config) error {
 	var firstErr error
-	for i := range e.pools {
-		if err := e.pools[i].db.Close(); err != nil && firstErr == nil {
+	for _, c := range pools {
+		if c == nil || c.db == nil {
+			continue
+		}
+		if err := c.db.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 	return firstErr
+}
+
+func (e *DB) Close() error {
+	return ClosePools(e.poolSlice())
 }
 
 func (e *DB) SetIDKey(key string) {
@@ -124,10 +184,17 @@ func (e *DB) SetIDKey(key string) {
 }
 
 func (e *DB) withSession(s *Session) *DB {
-	nEngine := *e
-	nEngine.session = s
-	if s != nil && s.config != nil {
-		nEngine.driver = s.config.driver
+	n := &DB{
+		driver:  e.driver,
+		session: s,
+		Debug:   e.Debug,
+		idKey:   e.idKey,
 	}
-	return &nEngine
+	if g := e.cur.Load(); g != nil {
+		n.cur.Store(g)
+	}
+	if s != nil && s.config != nil {
+		n.driver = s.config.driver
+	}
+	return n
 }
